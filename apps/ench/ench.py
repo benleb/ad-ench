@@ -19,7 +19,7 @@ import appdaemon.plugins.hass.hassapi as hass
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.4.0"
 
 DEFAULT_BATTERY_MIN_LEVEL = 20
 DEFAULT_INTERVAL = 18
