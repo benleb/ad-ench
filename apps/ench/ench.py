@@ -14,7 +14,7 @@ ench:
 from datetime import timedelta
 from typing import Any, Dict
 
-import adutils
+from adutils import ADutils
 import appdaemon.plugins.hass.hassapi as hass
 
 APP_NAME = "EnCh"
@@ -70,7 +70,8 @@ class EnCh(hass.Hass):  # type: ignore
                 self.cfg["unavailable"]["interval"] * 60 * 60,
             )
 
-        adutils.show_info(self.log, APP_NAME, self.cfg, list(), icon=APP_ICON, appdaemon_version=self.get_ad_version())
+        self.adu = ADutils(APP_NAME, self.cfg, icon=APP_ICON, ad=self)
+        self.adu.show_info()
 
     def check_battery(self, _: Any) -> None:
         """Handle scheduled checks."""
@@ -84,10 +85,10 @@ class EnCh(hass.Hass):  # type: ignore
                 battery_level = self.get_state(entity_id=entity, attribute="battery_level")
                 # self.log(f"{entity} -> {battery_level}")
                 if battery_level and battery_level <= int(self.cfg["battery"]["min_level"]):
-                    self.log(f"{ICONS['battery']} Battery low on {entity} - {int(battery_level)}%", level="WARNING", ascii_encode=False)
+                    self.adu.log(f"Battery low! \033[1m{entity}\033[0m - \033[1m{int(battery_level)}%\033[0m", icon=ICONS['battery'])
                     entities_low_battery[entity] = battery_level
             except TypeError as error:
-                self.log(f"Getting state/battery level failed for {entity}: {error}")
+                self.adu.log(f"Getting state/battery level failed for {entity}: {error}")
 
         # send notification
         if self.cfg["notify"] and entities_low_battery:
@@ -109,11 +110,11 @@ class EnCh(hass.Hass):  # type: ignore
                 if state in ["unavailable", "unknown"] and entity not in entities_unavailable:
                     entities_unavailable[entity] = state
             except TypeError as error:
-                self.log(f"Getting state/battery level failed for {entity}: {error}")
+                self.adu.log(f"Getting state/battery level failed for {entity}: {error}")
 
         for entity in sorted(entities_unavailable):
             state = entities_unavailable[entity]
-            self.log(f"{ICONS[state]} State of \033[1m{entity}\033[0m{f' ({self.friendly_name(entity)})' if self.cfg['show_friendly_name'] else ''} is \033[1m{entities_unavailable[entity]}\033[0m!", level="WARNING", ascii_encode=False)
+            self.adu.log(f"State of \033[1m{entity}\033[0m{f' ({self.friendly_name(entity)})' if self.cfg['show_friendly_name'] else ''} is \033[1m{entities_unavailable[entity]}\033[0m!", icon=ICONS[state])
 
         # send notification
         if self.cfg["notify"] and entities_unavailable:

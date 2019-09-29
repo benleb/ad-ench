@@ -1,1 +1,1 @@
-adutils>=0.3.0
+adutils~=0.4.0
