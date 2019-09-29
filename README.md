@@ -1,10 +1,10 @@
 # EnCh - Entity Checker
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
+
+**REPLACES [github.com/benleb/ad-batterycheck](https://github.com/benleb/ad-batterycheck)**
 
 **NEEDS THE APPDAEMON MASTER/DEV BRANCH! Current stable (v3.0.5) will not work!**
-
-**REPLACES github.com/benleb/ad-batterycheck**
 
 *Entity check [AppDaemon](https://github.com/home-assistant/appdaemon) app which reads out the `battery_level` attribute and/or state (`unknown` or `unavailable` currently) of Home Assistant entities and sends a notification if desired.*
 
@@ -36,4 +36,4 @@ key | optional | type | default | description
 `min_level` | True | integer | 20 | Minimum battery level a entity should have
 `interval` | True | integer | 18 | Hours between checks
 `unavailable` | True | | | Set to enable unavailable state check
-`interval` | True | integer | 18 | Hours between checks
+`interval` | True | integer | 6 | Hours between checks
