@@ -24,7 +24,7 @@ import hassapi as hass
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.4.3"
 
 BATTERY_MIN_LEVEL = 20
 INTERVAL_BATTERY = 18
