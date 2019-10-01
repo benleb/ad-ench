@@ -80,7 +80,7 @@ class EnCh(hass.Hass):  # type: ignore
         # merge excluded entities
         exclude = set(EXCLUDE)
         exclude.update([e.lower() for e in self.args.get("exclude", set())])
-        self.cfg["exclude"] = list(exclude)
+        self.cfg["exclude"] = sorted(list(exclude))
 
         # set units
         self.cfg.setdefault("_units", dict(interval="h", min_level="%"))
