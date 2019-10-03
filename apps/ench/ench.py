@@ -30,16 +30,9 @@ BATTERY_MIN_LEVEL = 20
 INTERVAL_BATTERY = 18
 INTERVAL_UNAVAILABLE = 6
 
-EXCLUDE = [
-    "binary_sensor.updater",
-    "persistent_notification.config_entry_discovery",
-]
+EXCLUDE = ["binary_sensor.updater", "persistent_notification.config_entry_discovery"]
 
-ICONS = dict(
-    battery="🔋",
-    unavailable="⁉️ ",
-    unknown="❓",
-)
+ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓")
 
 
 class EnCh(hass.Hass):  # type: ignore
@@ -55,7 +48,9 @@ class EnCh(hass.Hass):  # type: ignore
         if "battery" in self.args:
             self.cfg["battery"] = dict(
                 interval=self.args.get("battery").get("interval", INTERVAL_BATTERY),
-                min_level=self.args.get("battery").get("min_level", BATTERY_MIN_LEVEL),
+                min_level=int(
+                    self.args.get("battery").get("min_level", BATTERY_MIN_LEVEL)
+                ),
             )
 
             # schedule check
@@ -63,18 +58,24 @@ class EnCh(hass.Hass):  # type: ignore
                 self.check_battery,
                 self.datetime() + timedelta(seconds=60),
                 self.cfg["battery"]["interval"] * 60 * 60,
+                random_start=-10,
+                random_end=10,
             )
 
         # unavailable check
         if self.args.get("unavailable"):
             self.cfg["unavailable"] = dict(
-                interval=self.args.get("unavailable").get("interval", INTERVAL_UNAVAILABLE),
+                interval=self.args.get("unavailable").get(
+                    "interval", INTERVAL_UNAVAILABLE
+                )
             )
 
             self.run_every(
                 self.check_unavailable,
-                self.datetime() + timedelta(seconds=55),
+                self.datetime() + timedelta(seconds=60),
                 self.cfg["unavailable"]["interval"] * 60 * 60,
+                random_start=-10,
+                random_end=10,
             )
 
         # merge excluded entities
@@ -86,11 +87,13 @@ class EnCh(hass.Hass):  # type: ignore
         self.cfg.setdefault("_units", dict(interval="h", min_level="%"))
 
         # init adutils
-        self.adu = adutils.ADutils(APP_NAME, self.cfg, icon=APP_ICON, ad=self, show_config=True)
+        self.adu = adutils.ADutils(
+            APP_NAME, self.cfg, icon=APP_ICON, ad=self, show_config=True
+        )
 
     def check_battery(self, _: Any) -> None:
         """Handle scheduled checks."""
-        entities_low_battery: Dict[str, int] = dict()
+        results: Dict[str, int] = dict()
 
         self.adu.log(f"Checking entities for low battery levels...", APP_ICON)
         for entity in self.get_state():
@@ -98,25 +101,31 @@ class EnCh(hass.Hass):  # type: ignore
                 continue
 
             try:
-                battery_level = self.get_state(entity_id=entity, attribute="battery_level")
-                if battery_level and battery_level <= int(self.cfg["battery"]["min_level"]):
-                    self.adu.log(f"Battery low! \033[1m{entity}\033[0m → \033[1m{int(battery_level)}%\033[0m", icon=ICONS['battery'])
-                    entities_low_battery[entity] = battery_level
+                battery_level = self.get_state(
+                    entity_id=entity, attribute="battery_level"
+                )
+                if battery_level and battery_level <= self.cfg["battery"]["min_level"]:
+                    self.adu.log(
+                        f"Battery low! \033[1m{entity}\033[0m → "
+                        f"\033[1m{int(battery_level)}%\033[0m",
+                        icon=ICONS["battery"],
+                    )
+                    results[entity] = battery_level
             except TypeError as error:
-                self.adu.log(f"Getting state/battery level failed for {entity}: {error}")
+                self.adu.log(f"Failed to get state for {entity}: {error}")
 
         # send notification
-        if self.cfg["notify"] and entities_low_battery:
+        if self.cfg["notify"] and results:
             self.call_service(
                 str(self.cfg["notify"]).replace(".", "/"),
-                message=f"{ICONS['battery']} Battery low ({len(entities_low_battery)}): {', '.join([e for e in entities_low_battery])}",
+                message=f"{ICONS['battery']} Battery low ({len(results)}): {', '.join([e for e in results])}",
             )
 
-        self._print_result("battery", entities_low_battery, "low battery levels")
+        self._print_result("battery", results, "low battery levels")
 
     def check_unavailable(self, _: Any) -> None:
         """Handle scheduled checks."""
-        entities_unavailable: Dict[str, str] = dict()
+        results: Dict[str, str] = dict()
 
         self.adu.log(f"Checking entities for unavailable/unknown state...", APP_ICON)
         for entity in self.get_state():
@@ -125,27 +134,37 @@ class EnCh(hass.Hass):  # type: ignore
 
             try:
                 state = self.get_state(entity_id=entity)
-                if state in ["unavailable", "unknown"] and entity not in entities_unavailable:
-                    entities_unavailable[entity] = state
+                if state in ["unavailable", "unknown"] and entity not in results:
+                    results[entity] = state
             except TypeError as error:
-                self.adu.log(f"Getting state/battery level failed for {entity}: {error}")
+                self.adu.log(f"Failed to get state for {entity}: {error}")
 
-        for entity in sorted(entities_unavailable):
-            state = entities_unavailable[entity]
-            self.adu.log(f"\033[1m{entity}\033[0m{f' ({self.friendly_name(entity)})' if self.cfg['show_friendly_name'] else ''} is \033[1m{entities_unavailable[entity]}\033[0m!", icon=ICONS[state])
-
-        # send notification
-        if self.cfg["notify"] and entities_unavailable:
-            self.call_service(
-                str(self.cfg["notify"]).replace(".", "/"),
-                message=f"{APP_ICON} Unavailable entities ({len(entities_unavailable)}): {', '.join([e for e in entities_unavailable])}",
+        for entity in sorted(results):
+            state = results[entity]
+            self.adu.log(
+                f"\033[1m{entity}\033[0m"
+                f"{f' ({self.friendly_name(entity)})' if self.cfg['show_friendly_name'] else ''} "
+                f"is \033[1m{results[entity]}\033[0m!",
+                icon=ICONS[state],
             )
 
-        self._print_result("unavailable", entities_unavailable, "unavailable/unknown state")
+        # send notification
+        if self.cfg["notify"] and results:
+            self.call_service(
+                str(self.cfg["notify"]).replace(".", "/"),
+                message=f"{APP_ICON} Unavailable entities ({len(results)}): "
+                f"{', '.join([e for e in results])}",
+            )
+
+        self._print_result("unavailable", results, "unavailable/unknown state")
 
     def _print_result(self, check: str, entities: Dict[str, Any], reason: str) -> None:
         entites_found = len(entities)
         if entites_found > 0:
-            self.adu.log(f"got \033[1m{entites_found} entities\033[0m with \033[1m{reason}\033[0m!\n", APP_ICON)
+            self.adu.log(
+                f"got \033[1m{entites_found} entities\033[0m with "
+                f"\033[1m{reason}\033[0m!\n",
+                APP_ICON,
+            )
         else:
             self.adu.log(f"no entities with {reason} found", APP_ICON)
