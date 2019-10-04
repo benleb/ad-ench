@@ -4,7 +4,7 @@
 
 *REPLACES THE OLD [github.com/benleb/ad-batterycheck](https://github.com/benleb/ad-batterycheck)*
 
-**NEEDS THE APPDAEMON MASTER/DEV BRANCH! Current stable (v3.0.5) will not work!**
+**NEEDS THE APPDAEMON BETA OR DEV BRANCH! Current stable (v3.0.5) will not work!**
 
 *Entity check [AppDaemon](https://github.com/home-assistant/appdaemon) app which reads out the `battery_level` attribute and/or state (`unknown` or `unavailable` currently) of Home Assistant entities and sends a notification if desired.*
 
