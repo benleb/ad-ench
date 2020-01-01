@@ -11,7 +11,7 @@
 Use [HACS](https://github.com/custom-components/hacs) or [download](https://github.com/benleb/ad-ench/releases) the `ench` directory from inside the `apps` directory here to your local `apps` directory, then add the configuration to enable the `ench` module.
 
 ## App configuration
-
+Here's an exemplary configuration for this app (to be added to AppDaemon's configuration file, typically `apps.yaml`). Adjust the values as you wish.
 ```yaml
 ench:
   module: ench

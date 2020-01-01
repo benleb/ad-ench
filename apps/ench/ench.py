@@ -20,7 +20,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
 from apps.ench.adutils import adutils
-import hassapi as hass
+try:
+    import hassapi as hass  # newer variant
+except:
+    # Should be removed / simplified to the "newer variant" if https://github.com/benleb/ad-ench/issues/1
+    import appdaemon.plugins.hass.hassapi as hass
+
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
