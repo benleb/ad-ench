@@ -20,11 +20,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
 from apps.ench.adutils import adutils
+
 try:
     import hassapi as hass  # newer variant
 except ImportError:
-    # Should be removed / simplified to the "newer variant" if https://github.com/benleb/ad-ench/issues/1
-    import appdaemon.plugins.hass.hassapi as hass
+    import appdaemon.plugins.hass.hassapi as hass  # old variant, will be removed
 
 
 APP_NAME = "EnCh"
@@ -118,7 +118,8 @@ class EnCh(hass.Hass):  # type: ignore
         if "interval" in battery_cfg:
             self.adu.log(f"", icon="🧨")
             self.adu.log(
-                f" Please convert your {self.hl('interval')} (in hours) setting to {self.hl('interval_min')} (in minutes)",
+                f" Please convert your {self.hl('interval')} (in hours)"
+                f" setting to {self.hl('interval_min')} (in minutes)",
                 icon="🧨",
             )
             self.adu.log(
