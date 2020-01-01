@@ -19,12 +19,13 @@ ench:
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
-import adutils
+from apps.ench.adutils import adutils
 try:
     import hassapi as hass  # newer variant
 except:
     # Should be removed / simplified to the "newer variant" if https://github.com/benleb/ad-ench/issues/1
     import appdaemon.plugins.hass.hassapi as hass
+
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
@@ -46,7 +47,7 @@ ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓")
 class EnCh(hass.Hass):  # type: ignore
     """ench."""
 
-    async def initialize(self) -> None:
+    def initialize(self) -> None:
         """Register API endpoint."""
         self.cfg: Dict[str, Any] = dict()
         self.cfg["notify"] = self.args.get("notify")
@@ -71,9 +72,9 @@ class EnCh(hass.Hass):  # type: ignore
             )
 
             # schedule check
-            await self.run_every(
+            self.run_every(
                 self.check_battery,
-                await self.datetime() + timedelta(seconds=120),
+                self.datetime() + timedelta(seconds=120),
                 self.cfg["battery"]["interval_min"] * 60,
             )
 
@@ -92,9 +93,9 @@ class EnCh(hass.Hass):  # type: ignore
 
             self.cfg["unavailable"] = dict(interval_min=int(interval_min))
 
-            await self.run_every(
+            self.run_every(
                 self.check_unavailable,
-                await self.datetime() + timedelta(seconds=120),
+                self.datetime() + timedelta(seconds=120),
                 self.cfg["unavailable"]["interval_min"] * 60,
             )
 
@@ -104,7 +105,9 @@ class EnCh(hass.Hass):  # type: ignore
         self.cfg["exclude"] = sorted(list(exclude))
 
         # set units
-        self.cfg.setdefault("_units", dict(interval="h", interval_min="min", min_level="%"))
+        self.cfg.setdefault(
+            "_units", dict(interval="h", interval_min="min", min_level="%")
+        )
 
         # init adutils
         self.adu = adutils.ADutils(
@@ -114,23 +117,29 @@ class EnCh(hass.Hass):  # type: ignore
         # temp. warning bevore removing "interval"
         if "interval" in battery_cfg:
             self.adu.log(f"", icon="🧨")
-            self.adu.log(f" Please convert your {self.hl('interval')} (in hours) setting to {self.hl('interval_min')} (in minutes)", icon="🧨")
-            self.adu.log(f" The {self.hl('interval')} option will be removed in  future release", icon="🧨")
+            self.adu.log(
+                f" Please convert your {self.hl('interval')} (in hours) setting to {self.hl('interval_min')} (in minutes)",
+                icon="🧨",
+            )
+            self.adu.log(
+                f" The {self.hl('interval')} option will be removed in  future release",
+                icon="🧨",
+            )
             self.adu.log(f"", icon="🧨")
 
-    async def check_battery(self, _: Any) -> None:
+    def check_battery(self, _: Any) -> None:
         """Handle scheduled checks."""
         results: List[str] = []
 
         self.adu.log(f"Checking entities for low battery levels...", APP_ICON)
 
         entities = filter(
-            lambda x: x.lower() not in self.cfg["exclude"], await self.get_state()
+            lambda x: x.lower() not in self.cfg["exclude"], self.get_state()
         )
 
         for entity in sorted(entities):
             try:
-                attrs = await self.get_state(entity_id=entity, attribute="all")
+                attrs = self.get_state(entity_id=entity, attribute="all")
             except TypeError as error:
                 self.adu.log(f"Failed to get state for {entity}: {error}")
 
@@ -138,15 +147,15 @@ class EnCh(hass.Hass):  # type: ignore
             if battery_level and battery_level <= self.cfg["battery"]["min_level"]:
                 results.append(entity)
                 self.adu.log(
-                    f"{await self._name(entity)} has low "
+                    f"{self._name(entity)} has low "
                     f"{self.hl(f'battery → {self.hl(int(battery_level))}')}% | "
-                    f"last update: {await self.last_update(entity)}",
+                    f"last update: {self.last_update(entity)}",
                     icon=ICONS["battery"],
                 )
 
         # send notification
         if self.cfg["notify"] and results:
-            await self.call_service(
+            self.call_service(
                 str(self.cfg["notify"]).replace(".", "/"),
                 message=f"{ICONS['battery']} Battery low ({len(results)}): "
                 f"{', '.join([e for e in results])}",
@@ -154,20 +163,20 @@ class EnCh(hass.Hass):  # type: ignore
 
         self._print_result("battery", results, "low battery levels")
 
-    async def check_unavailable(self, _: Any) -> None:
+    def check_unavailable(self, _: Any) -> None:
         """Handle scheduled checks."""
         results: List[str] = []
 
         self.adu.log(f"Checking entities for unavailable/unknown state...", APP_ICON)
 
         entities = filter(
-            lambda x: x.lower() not in self.cfg["exclude"], await self.get_state()
+            lambda x: x.lower() not in self.cfg["exclude"], self.get_state()
         )
 
         for entity in sorted(entities):
 
             try:
-                attributes = await self.get_state(entity_id=entity, attribute="all")
+                attributes = self.get_state(entity_id=entity, attribute="all")
             except TypeError as error:
                 self.adu.log(f"Failed to get state for {entity}: {error}")
 
@@ -175,14 +184,14 @@ class EnCh(hass.Hass):  # type: ignore
             if state in BAD_STATES and entity not in results:
                 results.append(entity)
                 self.adu.log(
-                    f"{await self._name(entity)} is {self.hl(state)} | "
-                    f"last update: {await self.last_update(entity)}",
+                    f"{self._name(entity)} is {self.hl(state)} | "
+                    f"last update: {self.last_update(entity)}",
                     icon=ICONS[state],
                 )
 
         # send notification
         if self.cfg["notify"] and results:
-            await self.call_service(
+            self.call_service(
                 str(self.cfg["notify"]).replace(".", "/"),
                 message=f"{APP_ICON} Unavailable entities ({len(results)}): "
                 f"{', '.join([e for e in results])}",
@@ -190,12 +199,12 @@ class EnCh(hass.Hass):  # type: ignore
 
         self._print_result("unavailable", results, "unavailable/unknown state")
 
-    async def _name(self, entity: str) -> Optional[str]:
+    def _name(self, entity: str) -> Optional[str]:
         name: Optional[str] = None
         if self.cfg["show_friendly_name"]:
-            name = await self.friendly_name(entity)
+            name = self.friendly_name(entity)
         else:
-            name = await self._highlight_entity(entity)
+            name = self._highlight_entity(entity)
         return name
 
     def _print_result(self, check: str, entities: List[str], reason: str) -> None:
@@ -209,25 +218,24 @@ class EnCh(hass.Hass):  # type: ignore
             self.adu.log(f"no entities with {reason} found", APP_ICON)
 
     # todo  move these methods to adutils lib
-    async def last_update(self, entity: str) -> str:
-        lu_date, lu_time = await self._to_localtime(entity, "last_updated")
-        last_updated = str(lu_time.strftime('%H:%M:%S'))
-        if lu_date != await self.date():
+    def last_update(self, entity: str) -> str:
+        lu_date, lu_time = self._to_localtime(entity, "last_updated")
+        last_updated = str(lu_time.strftime("%H:%M:%S"))
+        if lu_date != self.date():
             last_updated = f"{last_updated} ({lu_date.strftime('%Y-%m-%d')})"
         return last_updated
 
-    async def _to_localtime(self, entity: str, attribute: str) -> Any:
-        attributes = await self.get_state(entity_id=entity, attribute="all")
+    def _to_localtime(self, entity: str, attribute: str) -> Any:
+        attributes = self.get_state(entity_id=entity, attribute="all")
         time_utc = datetime.fromisoformat(attributes[attribute])
         tzone = timezone(
-            timedelta(minutes=self.get_tz_offset()),
-            name=self.get_timezone()
+            timedelta(minutes=self.get_tz_offset()), name=self.get_timezone()
         )
         time_local = time_utc.astimezone(tzone)
         return (time_local.date(), time_local.time())
 
-    async def _highlight_entity(self, entity: str) -> str:
-        domain, entity = await self.split_entity(entity)
+    def _highlight_entity(self, entity: str) -> str:
+        domain, entity = self.split_entity(entity)
         return f"{domain}.{self.hl(entity)}"
 
     def hl(self, text: Union[int, str, None]) -> str:
