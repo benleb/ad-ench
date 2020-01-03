@@ -19,7 +19,7 @@ ench:
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
-from .adutils import adutils
+import adutils
 
 try:
     import hassapi as hass  # newer variant
