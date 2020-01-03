@@ -1,7 +1,5 @@
 # EnCh - Entity Checker
 
-*REPLACES THE OLD [github.com/benleb/ad-batterycheck](https://github.com/benleb/ad-batterycheck)*
-
 *EnCh is an [AppDaemon](https://github.com/home-assistant/appdaemon) app which checks the `battery_level` and/or state (`unknown` or `unavailable` currently) of Home Assistant entities and sends a notification if desired.*
 
 ## Installation
