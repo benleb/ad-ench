@@ -74,7 +74,7 @@ class EnCh(hass.Hass):  # type: ignore
             # schedule check
             self.run_every(
                 self.check_battery,
-                self.datetime() + timedelta(seconds=1),
+                self.datetime() + timedelta(seconds=120),
                 self.cfg["battery"]["interval_min"] * 60,
             )
 
@@ -95,7 +95,7 @@ class EnCh(hass.Hass):  # type: ignore
 
             self.run_every(
                 self.check_unavailable,
-                self.datetime() + timedelta(seconds=1),
+                self.datetime() + timedelta(seconds=120),
                 self.cfg["unavailable"]["interval_min"] * 60,
             )
 
