@@ -29,7 +29,7 @@ except ImportError:
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_VERSION = "0.4.9"
+APP_VERSION = "0.4.10"
 
 BATTERY_MIN_LEVEL = 20
 INTERVAL_BATTERY_MIN = 180
