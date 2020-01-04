@@ -40,6 +40,7 @@ INTERVAL_UNAVAILABLE = INTERVAL_UNAVAILABLE_MIN / 60
 
 EXCLUDE = ["binary_sensor.updater", "persistent_notification.config_entry_discovery"]
 BAD_STATES = ["unavailable", "unknown"]
+LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
 
 ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓")
 
@@ -139,17 +140,17 @@ class EnCh(hass.Hass):  # type: ignore
         for entity in sorted(entities):
             battery_level = None
             try:
-                if self.adu.appdaemon_v3:
-                    # will be removed as soon AD4 becomes stable
-                    battery_level = self.get_state(
-                        entity=entity, attribute="battery_level"
-                    )
-                else:
-                    battery_level = self.get_state(
-                        entity_id=entity, attribute="battery_level"
-                    )
-            except TypeError as error:
-                self.adu.log(f"Failed to get state for {entity}: {error}")
+                # check entities which may be battery level sensors
+                if "battery_level" in entity or "battery" in entity:
+                    battery_level = int(self._get_vi_state(entity))
+
+                # check entity attributes for battery levels
+                if not battery_level:
+                    for attr in LEVEL_ATTRIBUTES:
+                        battery_level = int(self._get_vi_state(entity, attribute=attr))
+                        break
+            except (TypeError, ValueError):
+                pass
 
             if battery_level and battery_level <= self.cfg["battery"]["min_level"]:
                 results.append(entity)
@@ -183,11 +184,7 @@ class EnCh(hass.Hass):  # type: ignore
         for entity in sorted(entities):
             state = None
             try:
-                if self.adu.appdaemon_v3:
-                    # will be removed as soon AD4 becomes stable
-                    state = self.get_state(entity=entity)
-                else:
-                    state = self.get_state(entity_id=entity)
+                state = self._get_vi_state(entity)
             except TypeError as error:
                 self.adu.log(f"Failed to get state for {entity}: {error}")
 
@@ -226,6 +223,15 @@ class EnCh(hass.Hass):  # type: ignore
             )
         else:
             self.adu.log(f"no entities with {reason} found", APP_ICON)
+
+    def _get_vi_state(self, entity: str, attribute: Optional[str] = None) -> Any:
+        # unified wrapper for get_state in AD3 and AD3
+        # will be removed as soon AD4 becomes stable
+        if self.adu.appdaemon_v3:
+            state = self.get_state(entity=entity, attribute=attribute)
+        else:
+            state = self.get_state(entity_id=entity, attribute=attribute)
+        return state
 
     # todo  move these methods to adutils lib
     def last_update(self, entity: str) -> Any:
