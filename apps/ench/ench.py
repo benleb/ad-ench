@@ -38,6 +38,8 @@ INTERVAL_BATTERY = INTERVAL_BATTERY_MIN / 60
 INTERVAL_UNAVAILABLE_MIN = 60
 INTERVAL_UNAVAILABLE = INTERVAL_UNAVAILABLE_MIN / 60
 
+INITIAL_DELAY = 120
+
 EXCLUDE = ["binary_sensor.updater", "persistent_notification.config_entry_discovery"]
 BAD_STATES = ["unavailable", "unknown"]
 LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
@@ -53,6 +55,9 @@ class EnCh(hass.Hass):  # type: ignore
         self.cfg: Dict[str, Any] = dict()
         self.cfg["notify"] = self.args.get("notify")
         self.cfg["show_friendly_name"] = bool(self.args.get("show_friendly_name", True))
+        self.cfg["initial_delay_secs"] = int(
+            self.args.get("initial_delay_secs", INITIAL_DELAY)
+        )
 
         # battery check
         if "battery" in self.args:
@@ -75,7 +80,7 @@ class EnCh(hass.Hass):  # type: ignore
             # schedule check
             self.run_every(
                 self.check_battery,
-                self.datetime() + timedelta(seconds=120),
+                self.datetime() + timedelta(seconds=self.cfg["initial_delay_secs"]),
                 self.cfg["battery"]["interval_min"] * 60,
             )
 
@@ -96,7 +101,7 @@ class EnCh(hass.Hass):  # type: ignore
 
             self.run_every(
                 self.check_unavailable,
-                self.datetime() + timedelta(seconds=120),
+                self.datetime() + timedelta(seconds=self.cfg["initial_delay_secs"]),
                 self.cfg["unavailable"]["interval_min"] * 60,
             )
 

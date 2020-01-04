@@ -32,6 +32,7 @@ key | optional | type | default | description
 `module` | False | string | ench | The module name of the app.
 `class` | False | string | EnCh | The name of the python class.
 `notify` | True | string | | The Home Assistant service used for notification
+`initial_delay_secs` | True | int | 120 | Time to wait before first checks
 `exclude` | True | list | | Excluded entities
 `battery` | True | map | | Set to enable low battery check
 `unavailable` | True | map | | Set to enable unavailable state check
