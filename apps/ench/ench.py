@@ -137,10 +137,17 @@ class EnCh(hass.Hass):  # type: ignore
         )
 
         for entity in sorted(entities):
+            battery_level = None
             try:
-                battery_level = self.get_state(
-                    entity_id=entity, attribute="battery_level"
-                )
+                if self.adu.appdaemon_v3:
+                    # will be removed as soon AD4 becomes stable
+                    battery_level = self.get_state(
+                        entity=entity, attribute="battery_level"
+                    )
+                else:
+                    battery_level = self.get_state(
+                        entity_id=entity, attribute="battery_level"
+                    )
             except TypeError as error:
                 self.adu.log(f"Failed to get state for {entity}: {error}")
 
@@ -174,9 +181,13 @@ class EnCh(hass.Hass):  # type: ignore
         )
 
         for entity in sorted(entities):
-
+            state = None
             try:
-                state = self.get_state(entity_id=entity)
+                if self.adu.appdaemon_v3:
+                    # will be removed as soon AD4 becomes stable
+                    state = self.get_state(entity=entity)
+                else:
+                    state = self.get_state(entity_id=entity)
             except TypeError as error:
                 self.adu.log(f"Failed to get state for {entity}: {error}")
 
@@ -225,17 +236,14 @@ class EnCh(hass.Hass):  # type: ignore
         return last_updated
 
     def _to_localtime(self, entity: str, attribute: str) -> Any:
-        attributes = self.get_state(entity_id=entity, attribute="all")
+        if self.adu.appdaemon_v3:
+            # will be removed as soon AD4 becomes stable
+            attributes = self.get_state(entity=entity, attribute="all")
+        else:
+            attributes = self.get_state(entity_id=entity, attribute="all")
         time_utc = datetime.fromisoformat(attributes[attribute])
         tzone = timezone(
             timedelta(minutes=self.get_tz_offset()), name=self.get_timezone()
         )
         time_local = time_utc.astimezone(tzone)
         return (time_local.date(), time_local.time())
-
-    # def _highlight_entity(self, entity: str) -> str:
-    #     domain, entity = self.split_entity(entity)
-    #     return f"{domain}.{adu.hl(entity)}"
-
-    # def hl(self, text: Union[int, str, None]) -> str:
-    #     return f"\033[1m{text}\033[0m"
