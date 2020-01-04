@@ -228,19 +228,19 @@ class EnCh(hass.Hass):  # type: ignore
             self.adu.log(f"no entities with {reason} found", APP_ICON)
 
     # todo  move these methods to adutils lib
-    def last_update(self, entity: str) -> str:
-        lu_date, lu_time = self._to_localtime(entity, "last_updated")
-        last_updated = str(lu_time.strftime("%H:%M:%S"))
-        if lu_date != self.date():
-            last_updated = f"{last_updated} ({lu_date.strftime('%Y-%m-%d')})"
+    def last_update(self, entity: str) -> Any:
+        if self.adu.appdaemon_v3:
+            # will be removed as soon AD4 becomes stable
+            last_updated = self.get_state(entity=entity, attribute="last_updated")
+        else:
+            lu_date, lu_time = self._to_localtime(entity, "last_updated")
+            last_updated = str(lu_time.strftime("%H:%M:%S"))
+            if lu_date != self.date():
+                last_updated = f"{last_updated} ({lu_date.strftime('%Y-%m-%d')})"
         return last_updated
 
     def _to_localtime(self, entity: str, attribute: str) -> Any:
-        if self.adu.appdaemon_v3:
-            # will be removed as soon AD4 becomes stable
-            attributes = self.get_state(entity=entity, attribute="all")
-        else:
-            attributes = self.get_state(entity_id=entity, attribute="all")
+        attributes = self.get_state(entity_id=entity, attribute="all")
         time_utc = datetime.fromisoformat(attributes[attribute])
         tzone = timezone(
             timedelta(minutes=self.get_tz_offset()), name=self.get_timezone()
