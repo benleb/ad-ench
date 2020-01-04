@@ -17,9 +17,9 @@ ench:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
-import adutils
+from adutils import ADutils as adu
 
 try:
     import hassapi as hass  # newer variant
@@ -74,7 +74,7 @@ class EnCh(hass.Hass):  # type: ignore
             # schedule check
             self.run_every(
                 self.check_battery,
-                self.datetime() + timedelta(seconds=120),
+                self.datetime() + timedelta(seconds=1),
                 self.cfg["battery"]["interval_min"] * 60,
             )
 
@@ -95,7 +95,7 @@ class EnCh(hass.Hass):  # type: ignore
 
             self.run_every(
                 self.check_unavailable,
-                self.datetime() + timedelta(seconds=120),
+                self.datetime() + timedelta(seconds=1),
                 self.cfg["unavailable"]["interval_min"] * 60,
             )
 
@@ -110,20 +110,18 @@ class EnCh(hass.Hass):  # type: ignore
         )
 
         # init adutils
-        self.adu = adutils.ADutils(
-            APP_NAME, self.cfg, icon=APP_ICON, ad=self, show_config=True
-        )
+        self.adu = adu(APP_NAME, self.cfg, icon=APP_ICON, ad=self, show_config=True)
 
         # temp. warning bevore removing "interval"
         if "interval" in battery_cfg:
             self.adu.log(f"", icon="🧨")
             self.adu.log(
-                f" Please convert your {self.hl('interval')} (in hours)"
-                f" setting to {self.hl('interval_min')} (in minutes)",
+                f" Please convert your {adu.hl('interval')} (in hours)"
+                f" setting to {adu.hl('interval_min')} (in minutes)",
                 icon="🧨",
             )
             self.adu.log(
-                f" The {self.hl('interval')} option will be removed in  future release",
+                f" The {adu.hl('interval')} option will be removed in  future release",
                 icon="🧨",
             )
             self.adu.log(f"", icon="🧨")
@@ -140,16 +138,17 @@ class EnCh(hass.Hass):  # type: ignore
 
         for entity in sorted(entities):
             try:
-                attrs = self.get_state(entity_id=entity, attribute="all")
+                battery_level = self.get_state(
+                    entity_id=entity, attribute="battery_level"
+                )
             except TypeError as error:
                 self.adu.log(f"Failed to get state for {entity}: {error}")
 
-            battery_level = attrs["attributes"].get("battery_level")
             if battery_level and battery_level <= self.cfg["battery"]["min_level"]:
                 results.append(entity)
                 self.adu.log(
                     f"{self._name(entity)} has low "
-                    f"{self.hl(f'battery → {self.hl(int(battery_level))}')}% | "
+                    f"{adu.hl(f'battery → {adu.hl(int(battery_level))}')}% | "
                     f"last update: {self.last_update(entity)}",
                     icon=ICONS["battery"],
                 )
@@ -177,15 +176,14 @@ class EnCh(hass.Hass):  # type: ignore
         for entity in sorted(entities):
 
             try:
-                attributes = self.get_state(entity_id=entity, attribute="all")
+                state = self.get_state(entity_id=entity)
             except TypeError as error:
                 self.adu.log(f"Failed to get state for {entity}: {error}")
 
-            state = attributes.get("state")
             if state in BAD_STATES and entity not in results:
                 results.append(entity)
                 self.adu.log(
-                    f"{self._name(entity)} is {self.hl(state)} | "
+                    f"{self._name(entity)} is {adu.hl(state)} | "
                     f"last update: {self.last_update(entity)}",
                     icon=ICONS[state],
                 )
@@ -205,14 +203,14 @@ class EnCh(hass.Hass):  # type: ignore
         if self.cfg["show_friendly_name"]:
             name = self.friendly_name(entity)
         else:
-            name = self._highlight_entity(entity)
+            name = adu.hl_entity(entity)
         return name
 
     def _print_result(self, check: str, entities: List[str], reason: str) -> None:
         entites_found = len(entities)
         if entites_found > 0:
             self.adu.log(
-                f"{self.hl(f'{entites_found} entities')} with {self.hl(reason)}!",
+                f"{adu.hl(f'{entites_found} entities')} with {adu.hl(reason)}!",
                 APP_ICON,
             )
         else:
@@ -235,9 +233,9 @@ class EnCh(hass.Hass):  # type: ignore
         time_local = time_utc.astimezone(tzone)
         return (time_local.date(), time_local.time())
 
-    def _highlight_entity(self, entity: str) -> str:
-        domain, entity = self.split_entity(entity)
-        return f"{domain}.{self.hl(entity)}"
+    # def _highlight_entity(self, entity: str) -> str:
+    #     domain, entity = self.split_entity(entity)
+    #     return f"{domain}.{adu.hl(entity)}"
 
-    def hl(self, text: Union[int, str, None]) -> str:
-        return f"\033[1m{text}\033[0m"
+    # def hl(self, text: Union[int, str, None]) -> str:
+    #     return f"\033[1m{text}\033[0m"
