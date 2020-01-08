@@ -5,6 +5,7 @@
 ench:
   module: ench
   class: EnCh
+  notify: notify.me
   exclude:
     - sensor.out_of_order
     - binary_sensor.always_unavailable
@@ -13,23 +14,23 @@ ench:
     min_level: 20
   unavailable
     interval_min: 60
-  notify: notify.me
+  stale:
+    max_stale_min: 15
+    entities:
+      - binary_sensor.cube
+      - sensor.humidity_stove
+      - device_tracker.boatymcboatface
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from adutils import ADutils as adu
-
-try:
-    import hassapi as hass  # newer variant
-except ImportError:
-    import appdaemon.plugins.hass.hassapi as hass  # old variant, will be removed
-
+import hassapi as hass
+from adutils import ADutils, hl, hl_entity
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_VERSION = "0.4.11"
+APP_VERSION = "0.4.6"
 
 BATTERY_MIN_LEVEL = 20
 INTERVAL_BATTERY_MIN = 180
@@ -38,71 +39,88 @@ INTERVAL_BATTERY = INTERVAL_BATTERY_MIN / 60
 INTERVAL_UNAVAILABLE_MIN = 60
 INTERVAL_UNAVAILABLE = INTERVAL_UNAVAILABLE_MIN / 60
 
-INITIAL_DELAY = 120
+INTERVAL_STALE_MIN = 15
+MAX_STALE_MIN = 15
+
+INITIAL_DELAY = 60
 
 EXCLUDE = ["binary_sensor.updater", "persistent_notification.config_entry_discovery"]
 BAD_STATES = ["unavailable", "unknown"]
 LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
 
-ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓")
+ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 
 
 class EnCh(hass.Hass):  # type: ignore
     """ench."""
 
-    def initialize(self) -> None:
+    async def initialize(self) -> None:
         """Register API endpoint."""
         self.cfg: Dict[str, Any] = dict()
         self.cfg["notify"] = self.args.get("notify")
         self.cfg["show_friendly_name"] = bool(self.args.get("show_friendly_name", True))
-        self.cfg["initial_delay_secs"] = int(
+        self.cfg["init_delay_secs"] = int(
             self.args.get("initial_delay_secs", INITIAL_DELAY)
+        )
+
+        # initial wait to give all devices a chance to become available
+        init_delay = await self.datetime() + timedelta(
+            seconds=self.cfg["init_delay_secs"]
         )
 
         # battery check
         if "battery" in self.args:
 
-            battery_cfg = self.args.get("battery")
-
-            # temp. to be compatible with the old interval
-            if "interval_min" in battery_cfg:
-                interval_min = battery_cfg.get("interval_min")
-            elif "interval" in battery_cfg:
-                interval_min = battery_cfg.get("interval") * 60
-            else:
-                interval_min = INTERVAL_BATTERY_MIN
-
+            config = self.args.get("battery")
+            # store configuration
             self.cfg["battery"] = dict(
-                interval_min=int(interval_min),
-                min_level=int(battery_cfg.get("min_level", BATTERY_MIN_LEVEL)),
+                interval_min=int(config.get("interval_min", INTERVAL_BATTERY_MIN)),
+                min_level=int(config.get("min_level", BATTERY_MIN_LEVEL)),
             )
 
             # schedule check
-            self.run_every(
+            await self.run_every(
                 self.check_battery,
-                self.datetime() + timedelta(seconds=self.cfg["initial_delay_secs"]),
+                init_delay,
                 self.cfg["battery"]["interval_min"] * 60,
             )
 
         # unavailable check
         if self.args.get("unavailable"):
 
-            states_cfg = self.args.get("unavailable")
+            config = self.args.get("unavailable")
+            # store configuration
+            self.cfg["unavailable"] = dict(
+                interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN))
+            )
 
-            # temp. to be compatible with the old interval
-            if "interval_min" in states_cfg:
-                interval_min = states_cfg.get("interval_min")
-            elif "interval" in states_cfg:
-                interval_min = states_cfg.get("interval") * 60
-            else:
-                interval_min = INTERVAL_UNAVAILABLE_MIN
-
-            self.cfg["unavailable"] = dict(interval_min=int(interval_min))
-
+            # schedule check
             self.run_every(
                 self.check_unavailable,
-                self.datetime() + timedelta(seconds=self.cfg["initial_delay_secs"]),
+                await self.datetime() + timedelta(seconds=self.cfg["init_delay_secs"]),
                 self.cfg["unavailable"]["interval_min"] * 60,
+            )
+
+        # stale entities check
+        if self.args.get("stale"):
+
+            config = self.args.get("stale")
+
+            interval_min = config.get("interval_min", INTERVAL_STALE_MIN)
+            max_stale_min = config.get("max_stale_min", MAX_STALE_MIN)
+
+            # store configuration
+            self.cfg["stale"] = dict(
+                interval_min=int(min([interval_min, max_stale_min])),
+                max_stale_min=int(max_stale_min),
+                entities=config.get("entities", []),
+            )
+
+            # schedule check
+            self.run_every(
+                self.check_stale,
+                await self.datetime() + timedelta(seconds=self.cfg["init_delay_secs"]),
+                self.cfg["stale"]["interval_min"] * 60,
             )
 
         # merge excluded entities
@@ -112,34 +130,20 @@ class EnCh(hass.Hass):  # type: ignore
 
         # set units
         self.cfg.setdefault(
-            "_units", dict(interval="h", interval_min="min", min_level="%")
+            "_units", dict(interval_min="min", max_stale_min="min", min_level="%"),
         )
 
         # init adutils
-        self.adu = adu(APP_NAME, self.cfg, icon=APP_ICON, ad=self, show_config=True)
+        self.adu = ADutils(APP_NAME, self.cfg, icon=APP_ICON, ad=self, show_config=True)
 
-        # temp. warning bevore removing "interval"
-        if "interval" in battery_cfg:
-            self.adu.log(f"", icon="🧨")
-            self.adu.log(
-                f" Please convert your {adu.hl('interval')} (in hours)"
-                f" setting to {adu.hl('interval_min')} (in minutes)",
-                icon="🧨",
-            )
-            self.adu.log(
-                f" The {adu.hl('interval')} option will be removed in  future release",
-                icon="🧨",
-            )
-            self.adu.log(f"", icon="🧨")
-
-    def check_battery(self, _: Any) -> None:
+    async def check_battery(self, _: Any) -> None:
         """Handle scheduled checks."""
         results: List[str] = []
 
-        self.adu.log(f"Checking entities for low battery levels...", APP_ICON)
+        self.adu.log(f"Checking entities for low battery levels...", icon=APP_ICON)
 
         entities = filter(
-            lambda x: x.lower() not in self.cfg["exclude"], self.get_state()
+            lambda x: x.lower() not in self.cfg["exclude"], await self.get_state()
         )
 
         for entity in sorted(entities):
@@ -147,12 +151,14 @@ class EnCh(hass.Hass):  # type: ignore
             try:
                 # check entities which may be battery level sensors
                 if "battery_level" in entity or "battery" in entity:
-                    battery_level = int(self._get_vi_state(entity))
+                    battery_level = int(await self.get_state(entity))
 
                 # check entity attributes for battery levels
                 if not battery_level:
                     for attr in LEVEL_ATTRIBUTES:
-                        battery_level = int(self._get_vi_state(entity, attribute=attr))
+                        battery_level = int(
+                            await self.get_state(entity, attribute=attr)
+                        )
                         break
             except (TypeError, ValueError):
                 pass
@@ -160,9 +166,9 @@ class EnCh(hass.Hass):  # type: ignore
             if battery_level and battery_level <= self.cfg["battery"]["min_level"]:
                 results.append(entity)
                 self.adu.log(
-                    f"{self._name(entity)} has low "
-                    f"{adu.hl(f'battery → {adu.hl(int(battery_level))}')}% | "
-                    f"last update: {self.last_update(entity)}",
+                    f"{await self._name(entity)} has low "
+                    f"{hl(f'battery → {hl(int(battery_level))}')}% | "
+                    f"last update: {await self.adu.last_update(entity)}",
                     icon=ICONS["battery"],
                 )
 
@@ -176,28 +182,26 @@ class EnCh(hass.Hass):  # type: ignore
 
         self._print_result("battery", results, "low battery levels")
 
-    def check_unavailable(self, _: Any) -> None:
+    async def check_unavailable(self, _: Any) -> None:
         """Handle scheduled checks."""
         results: List[str] = []
 
-        self.adu.log(f"Checking entities for unavailable/unknown state...", APP_ICON)
+        self.adu.log(
+            f"Checking entities for unavailable/unknown state...", icon=APP_ICON
+        )
 
         entities = filter(
-            lambda x: x.lower() not in self.cfg["exclude"], self.get_state()
+            lambda x: x.lower() not in self.cfg["exclude"], await self.get_state()
         )
 
         for entity in sorted(entities):
-            state = None
-            try:
-                state = self._get_vi_state(entity)
-            except TypeError as error:
-                self.adu.log(f"Failed to get state for {entity}: {error}")
+            state = await self.get_state(entity_id=entity)
 
             if state in BAD_STATES and entity not in results:
                 results.append(entity)
                 self.adu.log(
-                    f"{self._name(entity)} is {adu.hl(state)} | "
-                    f"last update: {self.last_update(entity)}",
+                    f"{await self._name(entity)} is {hl(state)} | "
+                    f"last update: {await self.adu.last_update(entity)}",
                     icon=ICONS[state],
                 )
 
@@ -211,50 +215,59 @@ class EnCh(hass.Hass):  # type: ignore
 
         self._print_result("unavailable", results, "unavailable/unknown state")
 
-    def _name(self, entity: str) -> Optional[str]:
+    async def check_stale(self, _: Any) -> None:
+        """Handle scheduled checks."""
+        results: List[str] = []
+
+        self.adu.log(f"Checking for stale entities...", icon=APP_ICON)
+
+        entities = filter(
+            lambda x: x.lower() not in self.cfg["exclude"],
+            self.cfg["stale"]["entities"],
+        )
+
+        for entity in sorted(entities):
+
+            last_update = self.convert_utc(
+                await self.get_state(entity_id=entity, attribute="last_updated")
+            )
+            now: datetime = await self.datetime(aware=True)
+
+            stale_time: timedelta = now - last_update
+            max_stale_min = timedelta(minutes=self.cfg["stale"]["max_stale_min"])
+
+            if stale_time and stale_time >= max_stale_min:
+                results.append(entity)
+                self.adu.log(
+                    f"{await self._name(entity)} is "
+                    f"{hl(f'stale since {hl(int(stale_time.seconds / 60))}')}min | "
+                    f"last update: {await self.adu.last_update(entity)}",
+                    icon=ICONS["stale"],
+                )
+
+        # send notification
+        if self.cfg["notify"] and results:
+            self.call_service(
+                str(self.cfg["notify"]).replace(".", "/"),
+                message=f"{APP_ICON} Stalled entities ({len(results)}): "
+                f"{', '.join([e for e in results])}",
+            )
+
+        self._print_result("stale", results, "stalled updates")
+
+    async def _name(self, entity: str, friendly_name: bool = False) -> Optional[str]:
         name: Optional[str] = None
         if self.cfg["show_friendly_name"]:
-            name = self.friendly_name(entity)
+            name = await self.friendly_name(entity)
         else:
-            name = adu.hl_entity(entity)
+            name = hl_entity(entity)
         return name
 
     def _print_result(self, check: str, entities: List[str], reason: str) -> None:
-        entites_found = len(entities)
-        if entites_found > 0:
+        # entites_found = len(entities)
+        if entities:
             self.adu.log(
-                f"{adu.hl(f'{entites_found} entities')} with {adu.hl(reason)}!",
-                APP_ICON,
+                f"{hl(f'{len(entities)} entities')} with {hl(reason)}!", icon=APP_ICON,
             )
         else:
-            self.adu.log(f"no entities with {reason} found", APP_ICON)
-
-    def _get_vi_state(self, entity: str, attribute: Optional[str] = None) -> Any:
-        # unified wrapper for get_state in AD3 and AD3
-        # will be removed as soon AD4 becomes stable
-        if self.adu.appdaemon_v3:
-            state = self.get_state(entity=entity, attribute=attribute)
-        else:
-            state = self.get_state(entity_id=entity, attribute=attribute)
-        return state
-
-    # todo  move these methods to adutils lib
-    def last_update(self, entity: str) -> Any:
-        if self.adu.appdaemon_v3:
-            # will be removed as soon AD4 becomes stable
-            last_updated = self.get_state(entity=entity, attribute="last_updated")
-        else:
-            lu_date, lu_time = self._to_localtime(entity, "last_updated")
-            last_updated = str(lu_time.strftime("%H:%M:%S"))
-            if lu_date != self.date():
-                last_updated = f"{last_updated} ({lu_date.strftime('%Y-%m-%d')})"
-        return last_updated
-
-    def _to_localtime(self, entity: str, attribute: str) -> Any:
-        attributes = self.get_state(entity_id=entity, attribute="all")
-        time_utc = datetime.fromisoformat(attributes[attribute])
-        tzone = timezone(
-            timedelta(minutes=self.get_tz_offset()), name=self.get_timezone()
-        )
-        time_local = time_utc.astimezone(tzone)
-        return (time_local.date(), time_local.time())
+            self.adu.log(f"{hl(f'no entities')} with {hl(reason)}!", icon=APP_ICON)
