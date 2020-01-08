@@ -5,8 +5,8 @@
 ## Supprted Checks
 
 * low **battery levels** of various devices
-* proper state, e.g. not `unknown` or `unavailable`
-* stale sensors (not updated for a specified time)
+* proper entity state, e.g. **not `unknown` or `unavailable`**
+* **stale entites** (not updated for a specified time)
 
 ## Installation
 
