@@ -30,7 +30,7 @@ from adutils import ADutils, hl, hl_entity
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_VERSION = "0.4.11"
+APP_VERSION = "0.5.0"
 
 BATTERY_MIN_LEVEL = 20
 INTERVAL_BATTERY_MIN = 180
