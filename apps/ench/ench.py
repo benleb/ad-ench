@@ -86,7 +86,7 @@ class EnCh(hass.Hass):  # type: ignore
             )
 
         # unavailable check
-        if self.args.get("unavailable"):
+        if "unavailable" in self.args:
 
             config = self.args.get("unavailable")
             # store configuration
@@ -102,7 +102,7 @@ class EnCh(hass.Hass):  # type: ignore
             )
 
         # stale entities check
-        if self.args.get("stale"):
+        if "stale" in self.args:
 
             config = self.args.get("stale")
 
