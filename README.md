@@ -48,7 +48,7 @@ key | optional | type | default | description
 `class` | False | string | EnCh | The name of the python class.
 `notify` | True | string | | The Home Assistant service used for notification
 `initial_delay_secs` | True | int | 120 | Time to wait before first checks. This grace-period is necessary to give slow devices and integrations in Home Assistant a chance to become "available".
-`exclude` | True | list | | Excluded entities
+`exclude` | True | list | | Excluded entities. Supports wildcard/patterns via [fnmatch](https://docs.python.org/3/library/fnmatch.html)
 `battery` | True | map | | Set to enable low battery check
 `unavailable` | True | map | | Set to enable unavailable state check
 `stale` | True | map | | Set to enable stale state/entity check
