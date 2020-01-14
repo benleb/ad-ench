@@ -71,4 +71,5 @@ key | optional | type | default | description
 key | optional | type | default | description
 -- | -- | -- | -- | --
 `interval_min` | True | integer | 15 | Minutes between checks (if this is longer than `max_stale_min`, we use that instead)
-`max_stale_min` | True | integer | 15 | If an entity is not updated during this time, a notification is triggered
+`max_stale_min` | True | integer | 60 | If an entity is not updated during this time, a notification is triggered
+`entities` | True | List | | If a list of entities is given, just these will be checked. Omitting this option checks all entities.

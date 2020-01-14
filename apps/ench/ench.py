@@ -24,6 +24,7 @@ ench:
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+from fnmatch import fnmatch
 
 import hassapi as hass
 from adutils import ADutils, hl, hl_entity
@@ -40,7 +41,7 @@ INTERVAL_UNAVAILABLE_MIN = 60
 INTERVAL_UNAVAILABLE = INTERVAL_UNAVAILABLE_MIN / 60
 
 INTERVAL_STALE_MIN = 15
-MAX_STALE_MIN = 15
+MAX_STALE_MIN = 60
 
 INITIAL_DELAY = 60
 
@@ -104,8 +105,7 @@ class EnCh(hass.Hass):  # type: ignore
         # stale entities check
         if "stale" in self.args:
 
-            config = self.args.get("stale")
-
+            config = self.args.get("stale", {})
             interval_min = config.get("interval_min", INTERVAL_STALE_MIN)
             max_stale_min = config.get("max_stale_min", MAX_STALE_MIN)
 
@@ -113,8 +113,9 @@ class EnCh(hass.Hass):  # type: ignore
             self.cfg["stale"] = dict(
                 interval_min=int(min([interval_min, max_stale_min])),
                 max_stale_min=int(max_stale_min),
-                entities=config.get("entities", []),
             )
+
+            self.cfg["stale"]["entities"] = config.get("entities", [])
 
             # schedule check
             self.run_every(
@@ -143,7 +144,10 @@ class EnCh(hass.Hass):  # type: ignore
         self.adu.log(f"Checking entities for low battery levels...", icon=APP_ICON)
 
         entities = filter(
-            lambda x: x.lower() not in self.cfg["exclude"], await self.get_state()
+            lambda entity: not any(
+                fnmatch(entity, pattern) for pattern in self.cfg["exclude"]
+            ),
+            await self.get_state(),
         )
 
         for entity in sorted(entities):
@@ -191,7 +195,10 @@ class EnCh(hass.Hass):  # type: ignore
         )
 
         entities = filter(
-            lambda x: x.lower() not in self.cfg["exclude"], await self.get_state()
+            lambda entity: not any(
+                fnmatch(entity, pattern) for pattern in self.cfg["exclude"]
+            ),
+            await self.get_state(),
         )
 
         for entity in sorted(entities):
@@ -221,9 +228,16 @@ class EnCh(hass.Hass):  # type: ignore
 
         self.adu.log(f"Checking for stale entities...", icon=APP_ICON)
 
+        if self.cfg["stale"]["entities"]:
+            all_entities = self.cfg["stale"]["entities"]
+        else:
+            all_entities = await self.get_state()
+
         entities = filter(
-            lambda x: x.lower() not in self.cfg["exclude"],
-            self.cfg["stale"]["entities"],
+            lambda entity: not any(
+                fnmatch(entity, pattern) for pattern in self.cfg["exclude"]
+            ),
+            all_entities,
         )
 
         for entity in sorted(entities):
