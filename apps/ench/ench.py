@@ -53,16 +53,19 @@ ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 
 
 class EnCh(hass.Hass):  # type: ignore
-    """ench."""
+    """EnCh."""
 
     async def initialize(self) -> None:
         """Register API endpoint."""
         self.cfg: Dict[str, Any] = dict()
-        self.cfg["notify"] = self.args.get("notify")
         self.cfg["show_friendly_name"] = bool(self.args.get("show_friendly_name", True))
         self.cfg["init_delay_secs"] = int(
             self.args.get("initial_delay_secs", INITIAL_DELAY)
         )
+
+        # global notification
+        if "notify" in self.args:
+            self.cfg["notify"] = self.args.get("notify")
 
         # initial wait to give all devices a chance to become available
         init_delay = await self.datetime() + timedelta(
@@ -73,11 +76,15 @@ class EnCh(hass.Hass):  # type: ignore
         if "battery" in self.args:
 
             config = self.args.get("battery")
+
             # store configuration
             self.cfg["battery"] = dict(
                 interval_min=int(config.get("interval_min", INTERVAL_BATTERY_MIN)),
                 min_level=int(config.get("min_level", BATTERY_MIN_LEVEL)),
             )
+
+            # no, per check or global notification
+            self.choose_notify_receipient("battery", config)
 
             # schedule check
             await self.run_every(
@@ -90,10 +97,14 @@ class EnCh(hass.Hass):  # type: ignore
         if "unavailable" in self.args:
 
             config = self.args.get("unavailable")
+
             # store configuration
             self.cfg["unavailable"] = dict(
-                interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN))
+                interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN)),
             )
+
+            # no, per check or global notification
+            self.choose_notify_receipient("unavailable", config)
 
             # schedule check
             self.run_every(
@@ -117,6 +128,9 @@ class EnCh(hass.Hass):  # type: ignore
 
             self.cfg["stale"]["entities"] = config.get("entities", [])
 
+            # no, per check or global notification
+            self.choose_notify_receipient("stale", config)
+
             # schedule check
             self.run_every(
                 self.check_stale,
@@ -139,6 +153,7 @@ class EnCh(hass.Hass):  # type: ignore
 
     async def check_battery(self, _: Any) -> None:
         """Handle scheduled checks."""
+        check_config = self.cfg["battery"]
         results: List[str] = []
 
         self.adu.log(f"Checking entities for low battery levels...", icon=APP_ICON)
@@ -167,7 +182,7 @@ class EnCh(hass.Hass):  # type: ignore
             except (TypeError, ValueError):
                 pass
 
-            if battery_level and battery_level <= self.cfg["battery"]["min_level"]:
+            if battery_level and battery_level <= check_config["min_level"]:
                 results.append(entity)
                 self.adu.log(
                     f"{await self._name(entity)} has low "
@@ -177,9 +192,10 @@ class EnCh(hass.Hass):  # type: ignore
                 )
 
         # send notification
-        if self.cfg["notify"] and results:
+        notify = self.cfg.get("notify") or check_config.get("notify")
+        if notify and results:
             self.call_service(
-                str(self.cfg["notify"]).replace(".", "/"),
+                str(notify).replace(".", "/"),
                 message=f"{ICONS['battery']} Battery low ({len(results)}): "
                 f"{', '.join([e for e in results])}",
             )
@@ -188,6 +204,7 @@ class EnCh(hass.Hass):  # type: ignore
 
     async def check_unavailable(self, _: Any) -> None:
         """Handle scheduled checks."""
+        check_config = self.cfg["unavailable"]
         results: List[str] = []
 
         self.adu.log(
@@ -213,9 +230,10 @@ class EnCh(hass.Hass):  # type: ignore
                 )
 
         # send notification
-        if self.cfg["notify"] and results:
+        notify = self.cfg.get("notify") or check_config.get("notify")
+        if notify and results:
             self.call_service(
-                str(self.cfg["notify"]).replace(".", "/"),
+                str(notify).replace(".", "/"),
                 message=f"{APP_ICON} Unavailable entities ({len(results)}): "
                 f"{', '.join([e for e in results])}",
             )
@@ -223,6 +241,7 @@ class EnCh(hass.Hass):  # type: ignore
         self._print_result("unavailable", results, "unavailable/unknown state")
 
     async def check_stale(self, _: Any) -> None:
+        check_config = self.cfg["stale"]
         """Handle scheduled checks."""
         results: List[str] = []
 
@@ -260,14 +279,19 @@ class EnCh(hass.Hass):  # type: ignore
                 )
 
         # send notification
-        if self.cfg["notify"] and results:
+        notify = self.cfg.get("notify") or check_config.get("notify")
+        if notify and results:
             self.call_service(
-                str(self.cfg["notify"]).replace(".", "/"),
+                str(notify).replace(".", "/"),
                 message=f"{APP_ICON} Stalled entities ({len(results)}): "
                 f"{', '.join([e for e in results])}",
             )
 
         self._print_result("stale", results, "stalled updates")
+
+    def choose_notify_receipient(self, check: str, config: Dict[str, Any]) -> None:
+        if "notify" in config and "notify" not in self.cfg:
+            self.cfg[check]["notify"] = config["notify"]
 
     async def _name(self, entity: str, friendly_name: bool = False) -> Optional[str]:
         name: Optional[str] = None
