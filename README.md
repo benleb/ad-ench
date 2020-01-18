@@ -10,8 +10,6 @@
 
 ## Installation
 
-**THIS NEEDS APPDAEMON BETA OR DEV BRANCH! Current stable (v3.0.5) will not work! Use [ad-ench-ad3](https://github.com/benleb/ad-ench-ad3) if you run AppDaemon <=4.x!**
-
 Use [HACS](https://github.com/custom-components/hacs) or [download](https://github.com/benleb/ad-ench/releases) the `ench` directory from inside the `apps` directory here to your local `apps` directory, then add the configuration to enable the `ench` module.
 
 ## App configuration
@@ -22,7 +20,7 @@ Here's an exemplary configuration for this app (to be added to AppDaemon's confi
 ench:
   module: ench
   class: EnCh
-  notify: "notify.mobile_app"
+  notify: "notify.mobile_app_user"
   show_friendly_name: False
   exclude:
     - sensor.out_of_order
@@ -32,6 +30,7 @@ ench:
     min_level: 20
   unavailable:
     interval_min: 60
+    notify: "notify.mobile_app_otheruser"
   stale:
     max_stale_min: 15
     entities:
@@ -41,6 +40,8 @@ ench:
 ```
 
 ### Configuration
+
+#### General
 
 key | optional | type | default | description
 -- | -- | -- | -- | --
@@ -59,12 +60,14 @@ key | optional | type | default | description
 -- | -- | -- | -- | --
 `min_level` | True | integer | 20 | Minimum battery level a entity should have
 `interval_min` | True | integer | 180 | Minutes between checks
+`notify` | True | string | | The Home Assistant service used for notification (Takes precedence over the `notify` setting configured in *General* section)
 
 #### Unavailable/unknown state configuration
 
 key | optional | type | default | description
 -- | -- | -- | -- | --
 `interval_min` | True | integer | 60 | Minutes between checks
+`notify` | True | string | | The Home Assistant service used for notification (Takes precedence over the `notify` setting configured in *General* section)
 
 #### Stale entity/state configuration
 
@@ -73,3 +76,4 @@ key | optional | type | default | description
 `interval_min` | True | integer | 15 | Minutes between checks (if this is longer than `max_stale_min`, we use that instead)
 `max_stale_min` | True | integer | 60 | If an entity is not updated during this time, a notification is triggered
 `entities` | True | List | | If a list of entities is given, just these will be checked. Omitting this option checks all entities.
+`notify` | True | string | | The Home Assistant service used for notification (Takes precedence over the `notify` setting configured in *General* section)
