@@ -1,5 +1,7 @@
 # EnCh - Entity Checker
 
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
+
 *EnCh is an [AppDaemon](https://github.com/home-assistant/appdaemon) app which can check Home Assistant entities and sends a notification if desired.*
 
 ## Supprted Checks
