@@ -33,7 +33,7 @@ from pkg_helper import install_packages, missing_requirements
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_VERSION = "0.5.2"
+APP_VERSION = "0.6.0"
 APP_REQUIREMENTS = {"adutils~=0.4.9"}
 
 BATTERY_MIN_LEVEL = 20
