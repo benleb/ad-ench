@@ -23,11 +23,12 @@ ench:
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
 from fnmatch import fnmatch
+from importlib import import_module
+from typing import Any, Dict, List, Optional
 
 import hassapi as hass
-from adutils import ADutils, hl, hl_entity
+from pkg_helper import get_requirements, install_packages, missing_requirements
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
@@ -50,6 +51,13 @@ BAD_STATES = ["unavailable", "unknown"]
 LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
 
 ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
+
+# install requirements
+missing = missing_requirements()
+if missing and install_packages(missing):
+    [import_module(package) for package in get_requirements().keys()]
+
+from adutils import ADutils, hl, hl_entity  # noqa
 
 
 class EnCh(hass.Hass):  # type: ignore
