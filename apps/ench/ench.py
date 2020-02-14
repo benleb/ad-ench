@@ -26,13 +26,15 @@ from datetime import datetime, timedelta
 from fnmatch import fnmatch
 from importlib import import_module
 from typing import Any, Dict, List, Optional
+from pkg_resources import parse_requirements as parse
 
 import hassapi as hass
-from pkg_helper import get_requirements, install_packages, missing_requirements
+from pkg_helper import install_packages, missing_requirements
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
 APP_VERSION = "0.5.2"
+APP_REQUIREMENTS = {"adutils~=0.4.9"}
 
 BATTERY_MIN_LEVEL = 20
 INTERVAL_BATTERY_MIN = 180
@@ -53,9 +55,9 @@ LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
 ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 
 # install requirements
-missing = missing_requirements()
+missing = missing_requirements(APP_REQUIREMENTS)
 if missing and install_packages(missing):
-    [import_module(package) for package in get_requirements().keys()]
+    [import_module(req.key) for req in parse(APP_REQUIREMENTS)]
 
 from adutils import ADutils, hl, hl_entity  # noqa
 
