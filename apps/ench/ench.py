@@ -24,7 +24,7 @@ ench:
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
-from importlib import import_module
+from importlib import import_module, invalidate_caches
 from typing import Any, Dict, List, Optional
 from pkg_resources import parse_requirements as parse
 
@@ -58,6 +58,7 @@ ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 missing = missing_requirements(APP_REQUIREMENTS)
 if missing and install_packages(missing):
     [import_module(req.key) for req in parse(APP_REQUIREMENTS)]
+    invalidate_caches()
 
 from adutils import ADutils, hl, hl_entity  # noqa
 
