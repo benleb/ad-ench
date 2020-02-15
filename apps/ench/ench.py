@@ -95,7 +95,7 @@ class EnCh(hass.Hass):  # type: ignore
             )
 
             # no, per check or global notification
-            self.choose_notify_receipient("battery", config)
+            self.choose_notify_recipient("battery", config)
 
             # schedule check
             await self.run_every(
@@ -115,7 +115,7 @@ class EnCh(hass.Hass):  # type: ignore
             )
 
             # no, per check or global notification
-            self.choose_notify_receipient("unavailable", config)
+            self.choose_notify_recipient("unavailable", config)
 
             # schedule check
             self.run_every(
@@ -140,7 +140,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.cfg["stale"]["entities"] = config.get("entities", [])
 
             # no, per check or global notification
-            self.choose_notify_receipient("stale", config)
+            self.choose_notify_recipient("stale", config)
 
             # schedule check
             self.run_every(
@@ -300,7 +300,7 @@ class EnCh(hass.Hass):  # type: ignore
 
         self._print_result("stale", results, "stalled updates")
 
-    def choose_notify_receipient(self, check: str, config: Dict[str, Any]) -> None:
+    def choose_notify_recipient(self, check: str, config: Dict[str, Any]) -> None:
         if "notify" in config and "notify" not in self.cfg:
             self.cfg[check]["notify"] = config["notify"]
 
@@ -313,7 +313,6 @@ class EnCh(hass.Hass):  # type: ignore
         return name
 
     def _print_result(self, check: str, entities: List[str], reason: str) -> None:
-        # entites_found = len(entities)
         if entities:
             self.adu.log(
                 f"{hl(f'{len(entities)} entities')} with {hl(reason)}!", icon=APP_ICON,
