@@ -330,6 +330,11 @@ class EnCh(hass.Hass):  # type: ignore
         elif self.cfg["hass_sensor"].startswith("sensor."):
             state = len(entities + list(keep_attributes.values()))
 
-        attributes = {check: "\n".join(entities), **keep_attributes, "unit_of_measurement": "Entities", "should_poll": False}
+        attributes = {
+            check: "\n".join(entities),
+            **keep_attributes,
+            "unit_of_measurement": "Entities",
+            "should_poll": False,
+        }
 
         await self.set_state(self.cfg["hass_sensor"], state=state, attributes=attributes)
