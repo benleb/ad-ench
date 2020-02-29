@@ -1,39 +1,20 @@
-"""AppDaemon EnCh app.
+"""EnCh.
+   Entity Checker
 
   @benleb / https://github.com/benleb/ad-ench
-
-ench:
-  module: ench
-  class: EnCh
-  notify: notify.me
-  exclude:
-    - sensor.out_of_order
-    - binary_sensor.always_unavailable
-  battery
-    interval_min: 180
-    min_level: 20
-  unavailable
-    interval_min: 60
-  stale:
-    max_stale_min: 15
-    entities:
-      - binary_sensor.cube
-      - sensor.humidity_stove
-      - device_tracker.boatymcboatface
 """
+
+__version__ = "0.6.0"
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
-from importlib import import_module, invalidate_caches
-from typing import Any, Dict, List, Optional
-from pkg_resources import parse_requirements as parse
+from typing import Any, Dict, List, Optional, Set
 
 import hassapi as hass
-from pkg_helper import install_packages, missing_requirements
+
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_VERSION = "0.6.0"
 APP_REQUIREMENTS = {"adutils~=0.4.9"}
 
 BATTERY_MIN_LEVEL = 20
@@ -54,13 +35,19 @@ LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
 
 ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 
-# install requirements
-missing = missing_requirements(APP_REQUIREMENTS)
-if missing and install_packages(missing):
-    [import_module(req.key) for req in parse(APP_REQUIREMENTS)]
-    invalidate_caches()
 
-from adutils import ADutils, hl, hl_entity  # noqa
+# install requirements
+def _install_packages(required: Set[str]) -> bool:
+    """Install packages from PyPi."""
+    from subprocess import run
+    from sys import executable
+    flags = ["--quiet", "--disable-pip-version-check", "--no-cache-dir", "--upgrade"]
+    return run([executable, "-m", "pip", "install", *flags, *required]).returncode == 0
+
+
+_install_packages(APP_REQUIREMENTS)
+
+from adutils import ADutils, hl, hl_entity, py37_or_higher  # noqa # isort:skip
 
 
 class EnCh(hass.Hass):  # type: ignore
