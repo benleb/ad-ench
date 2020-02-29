@@ -62,7 +62,10 @@ class EnCh(hass.Hass):  # type: ignore
         self.cfg["init_delay_secs"] = int(self.args.get("initial_delay_secs", INITIAL_DELAY))
 
         # home assistant sensor
-        self.cfg["hass_sensor"] = self.args.get("hass_sensor", None)
+        if (hass_sensor := self.args.get("hass_sensor", None)):
+            self.cfg["hass_sensor"] = (
+                hass_sensor if hass_sensor.startswith("sensor.") else f"sensor.{hass_sensor}"
+            )
 
         # global notification
         if "notify" in self.args:
@@ -308,31 +311,30 @@ class EnCh(hass.Hass):  # type: ignore
         else:
             self.adu.log(f"{hl(f'no entities')} with {hl(reason)}!", icon=APP_ICON)
 
-    async def update_sensor(self, check: str, entities: List[str]) -> None:
-        if check not in CHECKS:
+    async def update_sensor(self, check_name: str, entities: List[str]) -> None:
+        if check_name not in CHECKS:
             self.adu.log(
                 f"Unknown check: {hl(f'no entities')} - {self.cfg['hass_sensor']} not updated!",
                 icon=APP_ICON,
+                level="ERROR",
             )
 
-        keep_attributes: Dict[str, Any] = {}
+        # other available checks
         other_checks = CHECKS.copy()
-        other_checks.remove(check)
+        other_checks.remove(check_name)
 
-        for check_attr in other_checks:
-            keep_attributes[check_attr] = await self.get_state(
-                entity_id=self.cfg["hass_sensor"], attribute=check_attr
-            )
+        # save entities found by other checks
+        entities_before: Dict[str, Any] = {}
 
-        state: Union[bool, int]
-        if self.cfg["hass_sensor"].startswith("binary_sensor."):
-            state = bool(entities + list(keep_attributes.values()))
-        elif self.cfg["hass_sensor"].startswith("sensor."):
-            state = len(entities + list(keep_attributes.values()))
+        for check in other_checks:
+            if (attr := await self.get_state(entity_id=self.cfg["hass_sensor"], attribute=check)):
+                entities_before[check] = attr
 
-        attributes = {
-            check: "\n".join(entities),
-            **keep_attributes,
+        # state and attributes for sensor
+        state: int = int(len(entities) + sum([len(e) for e in entities_before.values()]))
+        attributes: Dict[str, Any] = {
+            check: entities,
+            **entities_before,
             "unit_of_measurement": "Entities",
             "should_poll": False,
         }
