@@ -8,7 +8,7 @@ __version__ = "0.6.0"
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Union
 
 import hassapi as hass
 
@@ -32,6 +32,7 @@ INITIAL_DELAY = 60
 EXCLUDE = ["binary_sensor.updater", "persistent_notification.config_entry_discovery"]
 BAD_STATES = ["unavailable", "unknown"]
 LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
+CHECKS = ["battery", "stale", "unavailable"]
 
 ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 
@@ -39,8 +40,9 @@ ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 # install requirements
 def _install_packages(required: Set[str]) -> bool:
     """Install packages from PyPi."""
-    from subprocess import run
+    from subprocess import run  # nosec
     from sys import executable
+
     flags = ["--quiet", "--disable-pip-version-check", "--no-cache-dir", "--upgrade"]
     return run([executable, "-m", "pip", "install", *flags, *required]).returncode == 0
 
@@ -57,18 +59,17 @@ class EnCh(hass.Hass):  # type: ignore
         """Register API endpoint."""
         self.cfg: Dict[str, Any] = dict()
         self.cfg["show_friendly_name"] = bool(self.args.get("show_friendly_name", True))
-        self.cfg["init_delay_secs"] = int(
-            self.args.get("initial_delay_secs", INITIAL_DELAY)
-        )
+        self.cfg["init_delay_secs"] = int(self.args.get("initial_delay_secs", INITIAL_DELAY))
+
+        # home assistant sensor
+        self.cfg["hass_sensor"] = self.args.get("hass_sensor", None)
 
         # global notification
         if "notify" in self.args:
             self.cfg["notify"] = self.args.get("notify")
 
         # initial wait to give all devices a chance to become available
-        init_delay = await self.datetime() + timedelta(
-            seconds=self.cfg["init_delay_secs"]
-        )
+        init_delay = await self.datetime() + timedelta(seconds=self.cfg["init_delay_secs"])
 
         # battery check
         if "battery" in self.args:
@@ -86,9 +87,7 @@ class EnCh(hass.Hass):  # type: ignore
 
             # schedule check
             await self.run_every(
-                self.check_battery,
-                init_delay,
-                self.cfg["battery"]["interval_min"] * 60,
+                self.check_battery, init_delay, self.cfg["battery"]["interval_min"] * 60,
             )
 
         # unavailable check
@@ -157,9 +156,7 @@ class EnCh(hass.Hass):  # type: ignore
         self.adu.log(f"Checking entities for low battery levels...", icon=APP_ICON)
 
         entities = filter(
-            lambda entity: not any(
-                fnmatch(entity, pattern) for pattern in self.cfg["exclude"]
-            ),
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
             await self.get_state(),
         )
 
@@ -173,9 +170,7 @@ class EnCh(hass.Hass):  # type: ignore
                 # check entity attributes for battery levels
                 if not battery_level:
                     for attr in LEVEL_ATTRIBUTES:
-                        battery_level = int(
-                            await self.get_state(entity, attribute=attr)
-                        )
+                        battery_level = int(await self.get_state(entity, attribute=attr))
                         break
             except (TypeError, ValueError):
                 pass
@@ -198,6 +193,10 @@ class EnCh(hass.Hass):  # type: ignore
                 f"{', '.join([e for e in results])}",
             )
 
+        # update hass sensor
+        if "hass_sensor" in self.cfg and self.cfg["hass_sensor"]:
+            await self.update_sensor("battery", results)
+
         self._print_result("battery", results, "low battery levels")
 
     async def check_unavailable(self, _: Any) -> None:
@@ -205,14 +204,10 @@ class EnCh(hass.Hass):  # type: ignore
         check_config = self.cfg["unavailable"]
         results: List[str] = []
 
-        self.adu.log(
-            f"Checking entities for unavailable/unknown state...", icon=APP_ICON
-        )
+        self.adu.log(f"Checking entities for unavailable/unknown state...", icon=APP_ICON)
 
         entities = filter(
-            lambda entity: not any(
-                fnmatch(entity, pattern) for pattern in self.cfg["exclude"]
-            ),
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
             await self.get_state(),
         )
 
@@ -236,6 +231,10 @@ class EnCh(hass.Hass):  # type: ignore
                 f"{', '.join([e for e in results])}",
             )
 
+        # update hass sensor
+        if "hass_sensor" in self.cfg and self.cfg["hass_sensor"]:
+            await self.update_sensor("unavailable", results)
+
         self._print_result("unavailable", results, "unavailable/unknown state")
 
     async def check_stale(self, _: Any) -> None:
@@ -251,9 +250,7 @@ class EnCh(hass.Hass):  # type: ignore
             all_entities = await self.get_state()
 
         entities = filter(
-            lambda entity: not any(
-                fnmatch(entity, pattern) for pattern in self.cfg["exclude"]
-            ),
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
             all_entities,
         )
 
@@ -285,6 +282,10 @@ class EnCh(hass.Hass):  # type: ignore
                 f"{', '.join([e for e in results])}",
             )
 
+        # update hass sensor
+        if "hass_sensor" in self.cfg and self.cfg["hass_sensor"]:
+            await self.update_sensor("stale", results)
+
         self._print_result("stale", results, "stalled updates")
 
     def choose_notify_recipient(self, check: str, config: Dict[str, Any]) -> None:
@@ -306,3 +307,34 @@ class EnCh(hass.Hass):  # type: ignore
             )
         else:
             self.adu.log(f"{hl(f'no entities')} with {hl(reason)}!", icon=APP_ICON)
+
+    async def update_sensor(self, check: str, entities: List[str]) -> None:
+        if check not in CHECKS:
+            self.adu.log(
+                f"Unknown check: {hl(f'no entities')} - {self.cfg['hass_sensor']} not updated!",
+                icon=APP_ICON,
+            )
+
+        keep_attributes: Dict[str, Any] = {}
+        other_checks = CHECKS.copy()
+        other_checks.remove(check)
+
+        for check_attr in other_checks:
+            keep_attributes[check_attr] = await self.get_state(
+                entity_id=self.cfg["hass_sensor"], attribute=check_attr
+            )
+
+        state: Union[bool, int]
+        if self.cfg["hass_sensor"].startswith("binary_sensor."):
+            state = bool(entities + list(keep_attributes.values()))
+        elif self.cfg["hass_sensor"].startswith("sensor."):
+            state = len(entities + list(keep_attributes.values()))
+
+        attributes = {check: "\n".join(entities), **keep_attributes, "should_poll": False}
+
+        print(f"{self.cfg['hass_sensor'] = }")
+        print(f"{keep_attributes = }")
+        print(f"{other_checks = }")
+        print(f"{attributes = }")
+
+        await self.set_state(self.cfg["hass_sensor"], state=state, attributes=attributes)
