@@ -8,6 +8,7 @@ __version__ = "0.6.0"
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
+from pprint import pformat
 from typing import Any, Dict, List, Optional, Set, Union
 
 import hassapi as hass
@@ -66,6 +67,9 @@ class EnCh(hass.Hass):  # type: ignore
             self.cfg["hass_sensor"] = (
                 hass_sensor if hass_sensor.startswith("sensor.") else f"sensor.{hass_sensor}"
             )
+            self.sensor_state: int = 0
+            self.sensor_attrs: Dict[str, Any] = {check: [] for check in CHECKS}
+            self.sensor_attrs.update({"unit_of_measurement": "Entities", "should_poll": False})
 
         # global notification
         if "notify" in self.args:
@@ -182,8 +186,10 @@ class EnCh(hass.Hass):  # type: ignore
                 results.append(entity)
                 self.adu.log(
                     f"{await self._name(entity)} has low "
+                    # f"{hl(f'battery → {hl(int(battery_level))}')}%",
                     f"{hl(f'battery → {hl(int(battery_level))}')}% | "
-                    f"last update: {await self.adu.last_update(entity)}",
+                    f"last update: {await self.last_update(entity)}",
+                    # f"last update: {self.adu.last_update(entity)}",
                     icon=ICONS["battery"],
                 )
 
@@ -221,7 +227,7 @@ class EnCh(hass.Hass):  # type: ignore
                 results.append(entity)
                 self.adu.log(
                     f"{await self._name(entity)} is {hl(state)} | "
-                    f"last update: {await self.adu.last_update(entity)}",
+                    f"last update: {await self.last_update(entity)}",
                     icon=ICONS[state],
                 )
 
@@ -272,7 +278,8 @@ class EnCh(hass.Hass):  # type: ignore
                 self.adu.log(
                     f"{await self._name(entity)} is "
                     f"{hl(f'stale since {hl(int(stale_time.seconds / 60))}')}min | "
-                    f"last update: {await self.adu.last_update(entity)}",
+                    f"last update: {last_update}",
+                    # f"last update: {await self.adu.last_update(entity)}",
                     icon=ICONS["stale"],
                 )
 
@@ -295,6 +302,11 @@ class EnCh(hass.Hass):  # type: ignore
         if "notify" in config and "notify" not in self.cfg:
             self.cfg[check]["notify"] = config["notify"]
 
+    async def last_update(self, entity_id: str) -> Any:
+        return self.convert_utc(
+            await self.get_state(entity_id=entity_id, attribute="last_updated")
+        )
+
     async def _name(self, entity: str, friendly_name: bool = False) -> Optional[str]:
         name: Optional[str] = None
         if self.cfg["show_friendly_name"]:
@@ -312,6 +324,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.adu.log(f"{hl(f'no entities')} with {hl(reason)}!", icon=APP_ICON)
 
     async def update_sensor(self, check_name: str, entities: List[str]) -> None:
+
         if check_name not in CHECKS:
             self.adu.log(
                 f"Unknown check: {hl(f'no entities')} - {self.cfg['hass_sensor']} not updated!",
@@ -319,24 +332,15 @@ class EnCh(hass.Hass):  # type: ignore
                 level="ERROR",
             )
 
-        # other available checks
-        other_checks = CHECKS.copy()
-        other_checks.remove(check_name)
+        self.sensor_attrs[check_name] = entities
+        self.sensor_state = sum([len(self.sensor_attrs[check]) for check in CHECKS])
+        self.set_state(
+            self.cfg["hass_sensor"], state=self.sensor_state, attributes=self.sensor_attrs
+        )
 
-        # save entities found by other checks
-        entities_before: Dict[str, Any] = {}
-
-        for check in other_checks:
-            if (attr := await self.get_state(entity_id=self.cfg["hass_sensor"], attribute=check)):
-                entities_before[check] = attr
-
-        # state and attributes for sensor
-        state: int = int(len(entities) + sum([len(e) for e in entities_before.values()]))
-        attributes: Dict[str, Any] = {
-            check: entities,
-            **entities_before,
-            "unit_of_measurement": "Entities",
-            "should_poll": False,
-        }
-
-        await self.set_state(self.cfg["hass_sensor"], state=state, attributes=attributes)
+        self.adu.log(
+            f"{hl(self.cfg['hass_sensor'])} updated: {hl(self.sensor_state)} "
+            f"| {str({k: len(v) for k, v in self.sensor_attrs.items() if type(v) == list})}",
+            icon=APP_ICON,
+            level="INFO",
+        )
