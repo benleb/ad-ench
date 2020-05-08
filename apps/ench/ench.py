@@ -199,7 +199,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{ICONS['battery']} Battery low ({len(results)}): "
-                f"{', '.join([e for e in results])}",
+                f"{', '.join([str(await self._name(entity)) for entity in results])}",
             )
 
         # update hass sensor
@@ -237,7 +237,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{APP_ICON} Unavailable entities ({len(results)}): "
-                f"{', '.join([e for e in results])}",
+                f"{', '.join([str(await self._name(entity)) for entity in results])}",
             )
 
         # update hass sensor
@@ -289,7 +289,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{APP_ICON} Stalled entities ({len(results)}): "
-                f"{', '.join([e for e in results])}",
+                f"{', '.join([str(await self._name(entity)) for entity in results])}",
             )
 
         # update hass sensor
