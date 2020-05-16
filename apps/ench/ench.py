@@ -199,7 +199,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{ICONS['battery']} Battery low ({len(results)}): "
-                f"{', '.join([str(await self._name(entity)) for entity in results])}",
+                f"{', '.join([str(await self._name(entity, notification=True)) for entity in results])}",
             )
 
         # update hass sensor
@@ -237,7 +237,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{APP_ICON} Unavailable entities ({len(results)}): "
-                f"{', '.join([str(await self._name(entity)) for entity in results])}",
+                f"{', '.join([str(await self._name(entity, notification=True)) for entity in results])}",
             )
 
         # update hass sensor
@@ -289,7 +289,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{APP_ICON} Stalled entities ({len(results)}): "
-                f"{', '.join([str(await self._name(entity)) for entity in results])}",
+                f"{', '.join([str(await self._name(entity, notification=True)) for entity in results])}",
             )
 
         # update hass sensor
@@ -303,16 +303,21 @@ class EnCh(hass.Hass):  # type: ignore
             self.cfg[check]["notify"] = config["notify"]
 
     async def last_update(self, entity_id: str) -> Any:
-        return self.convert_utc(
-            await self.get_state(entity_id=entity_id, attribute="last_updated")
-        )
+        return self.convert_utc(await self.get_state(entity_id=entity_id, attribute="last_updated"))
 
-    async def _name(self, entity: str, friendly_name: bool = False) -> Optional[str]:
+    async def _name(
+        self, entity: str, friendly_name: bool = False, notification: bool = False
+    ) -> Optional[str]:
+
         name: Optional[str] = None
         if self.cfg["show_friendly_name"]:
             name = await self.friendly_name(entity)
         else:
-            name = hl_entity(entity)
+            name = entity
+
+        if notification is False:
+            name = hl_entity(name)
+
         return name
 
     def _print_result(self, check: str, entities: List[str], reason: str) -> None:
