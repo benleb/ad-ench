@@ -50,7 +50,6 @@ key | optional | type | default | description
 `module` | False | string | ench | The module name of the app.
 `class` | False | string | EnCh | The name of the python class.
 `notify` | True | string | | The Home Assistant service used for notification
-
 `show_friendly_name` | True | bool | True | Use friendly name in logs/notifications instead of entity id.
 `initial_delay_secs` | True | int | 120 | Time to wait before first checks. This grace-period is necessary to give slow devices and integrations in Home Assistant a chance to become "available".
 `exclude` | True | list | | Excluded entities. Supports wildcard/patterns via [fnmatch](https://docs.python.org/3/library/fnmatch.html)
