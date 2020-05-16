@@ -9,7 +9,7 @@ __version__ = "0.6.1"
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
 from pprint import pformat
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import hassapi as hass
 
@@ -158,7 +158,7 @@ class EnCh(hass.Hass):  # type: ignore
     async def check_battery(self, _: Any) -> None:
         """Handle scheduled checks."""
         check_config = self.cfg["battery"]
-        results: List[str] = []
+        results: List[Tuple[str, int]] = []
 
         self.adu.log(f"Checking entities for low battery levels...", icon=APP_ICON)
 
@@ -183,7 +183,8 @@ class EnCh(hass.Hass):  # type: ignore
                 pass
 
             if battery_level and battery_level <= check_config["min_level"]:
-                results.append(entity)
+                # results.append(entity)
+                results.append((entity, battery_level))
                 self.adu.log(
                     f"{await self._name(entity)} has low "
                     # f"{hl(f'battery → {hl(int(battery_level))}')}%",
@@ -199,14 +200,14 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{ICONS['battery']} Battery low ({len(results)}): "
-                f"{', '.join([str(await self._name(entity, notification=True)) for entity in results])}",
+                f"{', '.join([f'{str(await self._name(entity[0], notification=True))} {entity[1]}%' for entity in results])}",
             )
 
         # update hass sensor
         if "hass_sensor" in self.cfg and self.cfg["hass_sensor"]:
-            await self.update_sensor("battery", results)
+            await self.update_sensor("battery", [entity[0] for entity in results])
 
-        self._print_result("battery", results, "low battery levels")
+        self._print_result("battery", [entity[0] for entity in results], "low battery levels")
 
     async def check_unavailable(self, _: Any) -> None:
         """Handle scheduled checks."""
