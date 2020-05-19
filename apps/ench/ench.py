@@ -8,7 +8,7 @@ __version__ = "0.6.2"
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
-from pprint import pformat
+from sys import version_info
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import hassapi as hass
@@ -50,7 +50,22 @@ def _install_packages(required: Set[str]) -> bool:
 
 _install_packages(APP_REQUIREMENTS)
 
-from adutils import ADutils, hl, hl_entity, py37_or_higher  # noqa # isort:skip
+from adutils import ADutils  # noqa # isort:skip
+
+
+# version checks
+py3_or_higher = version_info.major >= 3
+py37_or_higher = py3_or_higher and version_info.minor >= 7
+py38_or_higher = py3_or_higher and version_info.minor >= 8
+
+
+def hl(text: Union[int, float, str]) -> str:
+    return f"\033[1m{text}\033[0m"
+
+
+def hl_entity(entity: str) -> str:
+    domain, entity = entity.split(".")
+    return f"{domain}.{hl(entity)}"
 
 
 class EnCh(hass.Hass):  # type: ignore
@@ -64,9 +79,7 @@ class EnCh(hass.Hass):  # type: ignore
 
         # home assistant sensor
         if (hass_sensor := self.args.get("hass_sensor", None)):
-            self.cfg["hass_sensor"] = (
-                hass_sensor if hass_sensor.startswith("sensor.") else f"sensor.{hass_sensor}"
-            )
+            self.cfg["hass_sensor"] = hass_sensor if hass_sensor.startswith("sensor.") else f"sensor.{hass_sensor}"
             self.sensor_state: int = 0
             self.sensor_attrs: Dict[str, Any] = {check: [] for check in CHECKS}
             self.sensor_attrs.update({"unit_of_measurement": "Entities", "should_poll": False})
@@ -103,9 +116,7 @@ class EnCh(hass.Hass):  # type: ignore
             config = self.args.get("unavailable")
 
             # store configuration
-            self.cfg["unavailable"] = dict(
-                interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN)),
-            )
+            self.cfg["unavailable"] = dict(interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN)),)
 
             # no, per check or global notification
             self.choose_notify_recipient("unavailable", config)
@@ -126,8 +137,7 @@ class EnCh(hass.Hass):  # type: ignore
 
             # store configuration
             self.cfg["stale"] = dict(
-                interval_min=int(min([interval_min, max_stale_min])),
-                max_stale_min=int(max_stale_min),
+                interval_min=int(min([interval_min, max_stale_min])), max_stale_min=int(max_stale_min),
             )
 
             self.cfg["stale"]["entities"] = config.get("entities", [])
@@ -160,11 +170,10 @@ class EnCh(hass.Hass):  # type: ignore
         check_config = self.cfg["battery"]
         results: List[Tuple[str, int]] = []
 
-        self.adu.log(f"Checking entities for low battery levels...", icon=APP_ICON)
+        self.adu.log("Checking entities for low battery levels...", icon=APP_ICON)
 
         entities = filter(
-            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
-            await self.get_state(),
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), await self.get_state(),
         )
 
         for entity in sorted(entities):
@@ -188,8 +197,7 @@ class EnCh(hass.Hass):  # type: ignore
                 self.adu.log(
                     f"{await self._name(entity)} has low "
                     # f"{hl(f'battery → {hl(int(battery_level))}')}%",
-                    f"{hl(f'battery → {hl(int(battery_level))}')}% | "
-                    f"last update: {await self.last_update(entity)}",
+                    f"{hl(f'battery → {hl(int(battery_level))}')}% | " f"last update: {await self.last_update(entity)}",
                     # f"last update: {self.adu.last_update(entity)}",
                     icon=ICONS["battery"],
                 )
@@ -214,11 +222,10 @@ class EnCh(hass.Hass):  # type: ignore
         check_config = self.cfg["unavailable"]
         results: List[str] = []
 
-        self.adu.log(f"Checking entities for unavailable/unknown state...", icon=APP_ICON)
+        self.adu.log("sChecking entities for unavailable/unknown state...", icon=APP_ICON)
 
         entities = filter(
-            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
-            await self.get_state(),
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), await self.get_state(),
         )
 
         for entity in sorted(entities):
@@ -227,8 +234,7 @@ class EnCh(hass.Hass):  # type: ignore
             if state in BAD_STATES and entity not in results:
                 results.append(entity)
                 self.adu.log(
-                    f"{await self._name(entity)} is {hl(state)} | "
-                    f"last update: {await self.last_update(entity)}",
+                    f"{await self._name(entity)} is {hl(state)} | " f"last update: {await self.last_update(entity)}",
                     icon=ICONS[state],
                 )
 
@@ -252,7 +258,7 @@ class EnCh(hass.Hass):  # type: ignore
         """Handle scheduled checks."""
         results: List[str] = []
 
-        self.adu.log(f"Checking for stale entities...", icon=APP_ICON)
+        self.adu.log("Checking for stale entities...", icon=APP_ICON)
 
         if self.cfg["stale"]["entities"]:
             all_entities = self.cfg["stale"]["entities"]
@@ -260,15 +266,12 @@ class EnCh(hass.Hass):  # type: ignore
             all_entities = await self.get_state()
 
         entities = filter(
-            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
-            all_entities,
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), all_entities,
         )
 
         for entity in sorted(entities):
 
-            last_update = self.convert_utc(
-                await self.get_state(entity_id=entity, attribute="last_updated")
-            )
+            last_update = self.convert_utc(await self.get_state(entity_id=entity, attribute="last_updated"))
             now: datetime = await self.datetime(aware=True)
 
             stale_time: timedelta = now - last_update
@@ -306,9 +309,7 @@ class EnCh(hass.Hass):  # type: ignore
     async def last_update(self, entity_id: str) -> Any:
         return self.convert_utc(await self.get_state(entity_id=entity_id, attribute="last_updated"))
 
-    async def _name(
-        self, entity: str, friendly_name: bool = False, notification: bool = False
-    ) -> Optional[str]:
+    async def _name(self, entity: str, friendly_name: bool = False, notification: bool = False) -> Optional[str]:
 
         name: Optional[str] = None
         if self.cfg["show_friendly_name"]:
@@ -316,7 +317,7 @@ class EnCh(hass.Hass):  # type: ignore
         else:
             name = entity
 
-        if notification is False:
+        if notification is False and name:
             name = hl_entity(name)
 
         return name
@@ -340,9 +341,7 @@ class EnCh(hass.Hass):  # type: ignore
 
         self.sensor_attrs[check_name] = entities
         self.sensor_state = sum([len(self.sensor_attrs[check]) for check in CHECKS])
-        self.set_state(
-            self.cfg["hass_sensor"], state=self.sensor_state, attributes=self.sensor_attrs
-        )
+        self.set_state(self.cfg["hass_sensor"], state=self.sensor_state, attributes=self.sensor_attrs)
 
         self.adu.log(
             f"{hl(self.cfg['hass_sensor'])} updated: {hl(self.sensor_state)} "
