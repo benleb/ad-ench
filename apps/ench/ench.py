@@ -4,7 +4,7 @@
   @benleb / https://github.com/benleb/ad-ench
 """
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
