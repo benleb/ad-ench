@@ -8,15 +8,15 @@ __version__ = "0.6.3"
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
+from pprint import pformat
 from sys import version_info
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import hassapi as hass
 
 
 APP_NAME = "EnCh"
 APP_ICON = "👩‍⚕️"
-APP_REQUIREMENTS = {"adutils~=0.4.9"}
 
 BATTERY_MIN_LEVEL = 20
 INTERVAL_BATTERY_MIN = 180
@@ -38,21 +38,6 @@ CHECKS = ["battery", "stale", "unavailable"]
 ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 
 
-# install requirements
-def _install_packages(required: Set[str]) -> bool:
-    """Install packages from PyPi."""
-    from subprocess import run  # nosec
-    from sys import executable
-
-    flags = ["--quiet", "--disable-pip-version-check", "--no-cache-dir", "--upgrade"]
-    return run([executable, "-m", "pip", "install", *flags, *required]).returncode == 0
-
-
-_install_packages(APP_REQUIREMENTS)
-
-from adutils import ADutils  # noqa # isort:skip
-
-
 # version checks
 py3_or_higher = version_info.major >= 3
 py37_or_higher = py3_or_higher and version_info.minor >= 7
@@ -71,8 +56,26 @@ def hl_entity(entity: str) -> str:
 class EnCh(hass.Hass):  # type: ignore
     """EnCh."""
 
+    def lg(self, msg: str, *args: Any, icon: Optional[str] = None, repeat: int = 1, **kwargs: Any) -> None:
+        kwargs.setdefault("ascii_encode", False)
+        message = f"{f'{icon} ' if icon else ' '}{msg}"
+        _ = [self.log(message, *args, **kwargs) for _ in range(repeat)]
+
     async def initialize(self) -> None:
         """Register API endpoint."""
+        self.icon = APP_ICON
+
+        # python version check
+        if not py38_or_higher:
+            icon_alert = "⚠️"
+            self.lg("", icon=icon_alert)
+            self.lg("")
+            self.lg(f"please update to {hl('Python >= 3.8')}! 🤪", icon=icon_alert)
+            self.lg("")
+            self.lg("", icon=icon_alert)
+        if not py37_or_higher:
+            raise ValueError
+
         self.cfg: Dict[str, Any] = dict()
         self.cfg["show_friendly_name"] = bool(self.args.get("show_friendly_name", True))
         self.cfg["init_delay_secs"] = int(self.args.get("initial_delay_secs", INITIAL_DELAY))
@@ -162,15 +165,14 @@ class EnCh(hass.Hass):  # type: ignore
             "_units", dict(interval_min="min", max_stale_min="min", min_level="%"),
         )
 
-        # init adutils
-        self.adu = ADutils(APP_NAME, self.cfg, icon=APP_ICON, ad=self, show_config=True)
+        self.show_info(self.args)
 
     async def check_battery(self, _: Any) -> None:
         """Handle scheduled checks."""
         check_config = self.cfg["battery"]
         results: List[Tuple[str, int]] = []
 
-        self.adu.log("Checking entities for low battery levels...", icon=APP_ICON)
+        self.lg("Checking entities for low battery levels...", icon=APP_ICON)
 
         entities = filter(
             lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), await self.get_state(),
@@ -194,7 +196,7 @@ class EnCh(hass.Hass):  # type: ignore
             if battery_level and battery_level <= check_config["min_level"]:
                 # results.append(entity)
                 results.append((entity, battery_level))
-                self.adu.log(
+                self.lg(
                     f"{await self._name(entity)} has low "
                     # f"{hl(f'battery → {hl(int(battery_level))}')}%",
                     f"{hl(f'battery → {hl(int(battery_level))}')}% | " f"last update: {await self.last_update(entity)}",
@@ -208,7 +210,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.call_service(
                 str(notify).replace(".", "/"),
                 message=f"{ICONS['battery']} Battery low ({len(results)}): "
-                f"{', '.join([f'{str(await self._name(entity[0], notification=True))} {entity[1]}%' for entity in results])}",
+                f"{', '.join([f'{str(await self._name(entity[0], notification=True))} {entity[1]}%' for entity in results])}",  # noqa
             )
 
         # update hass sensor
@@ -222,7 +224,7 @@ class EnCh(hass.Hass):  # type: ignore
         check_config = self.cfg["unavailable"]
         results: List[str] = []
 
-        self.adu.log("sChecking entities for unavailable/unknown state...", icon=APP_ICON)
+        self.lg("sChecking entities for unavailable/unknown state...", icon=APP_ICON)
 
         entities = filter(
             lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), await self.get_state(),
@@ -233,7 +235,7 @@ class EnCh(hass.Hass):  # type: ignore
 
             if state in BAD_STATES and entity not in results:
                 results.append(entity)
-                self.adu.log(
+                self.lg(
                     f"{await self._name(entity)} is {hl(state)} | " f"last update: {await self.last_update(entity)}",
                     icon=ICONS[state],
                 )
@@ -258,7 +260,7 @@ class EnCh(hass.Hass):  # type: ignore
         """Handle scheduled checks."""
         results: List[str] = []
 
-        self.adu.log("Checking for stale entities...", icon=APP_ICON)
+        self.lg("Checking for stale entities...", icon=APP_ICON)
 
         if self.cfg["stale"]["entities"]:
             all_entities = self.cfg["stale"]["entities"]
@@ -279,11 +281,10 @@ class EnCh(hass.Hass):  # type: ignore
 
             if stale_time and stale_time >= max_stale_min:
                 results.append(entity)
-                self.adu.log(
+                self.lg(
                     f"{await self._name(entity)} is "
                     f"{hl(f'stale since {hl(int(stale_time.seconds / 60))}')}min | "
                     f"last update: {last_update}",
-                    # f"last update: {await self.adu.last_update(entity)}",
                     icon=ICONS["stale"],
                 )
 
@@ -324,16 +325,16 @@ class EnCh(hass.Hass):  # type: ignore
 
     def _print_result(self, check: str, entities: List[str], reason: str) -> None:
         if entities:
-            self.adu.log(
+            self.lg(
                 f"{hl(f'{len(entities)} entities')} with {hl(reason)}!", icon=APP_ICON,
             )
         else:
-            self.adu.log(f"{hl(f'no entities')} with {hl(reason)}!", icon=APP_ICON)
+            self.lg(f"{hl(f'no entities')} with {hl(reason)}!", icon=APP_ICON)
 
     async def update_sensor(self, check_name: str, entities: List[str]) -> None:
 
         if check_name not in CHECKS:
-            self.adu.log(
+            self.lg(
                 f"Unknown check: {hl(f'no entities')} - {self.cfg['hass_sensor']} not updated!",
                 icon=APP_ICON,
                 level="ERROR",
@@ -343,9 +344,86 @@ class EnCh(hass.Hass):  # type: ignore
         self.sensor_state = sum([len(self.sensor_attrs[check]) for check in CHECKS])
         self.set_state(self.cfg["hass_sensor"], state=self.sensor_state, attributes=self.sensor_attrs)
 
-        self.adu.log(
+        self.lg(
             f"{hl(self.cfg['hass_sensor'])} updated: {hl(self.sensor_state)} "
-            f"| {str({k: len(v) for k, v in self.sensor_attrs.items() if type(v) == list})}",
+            f"| {', '.join([f'{k}: {hl(len(v))}' for k, v in self.sensor_attrs.items() if type(v) == list])}",
             icon=APP_ICON,
             level="INFO",
         )
+
+    def show_info(self, config: Optional[Dict[str, Any]] = None) -> None:
+        # check if a room is given
+        if config:
+            self.config = config
+
+        if not self.config:
+            self.lg("no configuration available", icon="‼️", level="ERROR")
+            return
+
+        room = ""
+        if "room" in self.config:
+            room = f" - {hl(self.config['room'].capitalize())}"
+
+        self.lg("")
+        self.lg(f"{hl(APP_NAME)}{room}", icon=self.icon)
+        self.lg("")
+
+        listeners = self.config.pop("listeners", None)
+
+        for key, value in self.config.items():
+
+            # hide "internal keys" when displaying config
+            if key in ["module", "class"] or key.startswith("_"):
+                continue
+
+            if isinstance(value, list):
+                self.print_collection(key, value, 2)
+            elif isinstance(value, dict):
+                self.print_collection(key, value, 2)
+            else:
+                self._print_cfg_setting(key, value, 2)
+
+        if listeners:
+            self.lg("  event listeners:")
+            for listener in sorted(listeners):
+                self.lg(f"    - {hl(listener)}")
+
+        self.lg("")
+
+    def print_collection(self, key: str, collection: Iterable[Any], indentation: int = 2) -> None:
+
+        self.log(f"{indentation * ' '}{key}:")
+        indentation = indentation + 2
+
+        for item in collection:
+            indent = indentation * " "
+
+            if isinstance(item, dict):
+                if "name" in item:
+                    self.print_collection(item.pop("name", ""), item, indentation)
+                else:
+                    self.log(f"{indent}{hl(pformat(item, compact=True))}")
+
+            elif isinstance(collection, dict):
+                self._print_cfg_setting(item, collection[item], indentation)
+
+            else:
+                self.log(f"{indent}- {hl(item)}")
+
+    def _print_cfg_setting(self, key: str, value: Union[int, str], indentation: int) -> None:
+        unit = prefix = ""
+        indent = indentation * " "
+
+        # legacy way
+        if key == "delay" and isinstance(value, int):
+            unit = "min"
+            min_value = f"{int(value / 60)}:{int(value % 60):02d}"
+            self.log(f"{indent}{key}: {prefix}{hl(min_value)}{unit} ~≈ " f"{hl(value)}sec")
+
+        else:
+            if "_units" in self.config and key in self.config["_units"]:
+                unit = self.config["_units"][key]
+            if "_prefixes" in self.config and key in self.config["_prefixes"]:
+                prefix = self.config["_prefixes"][key]
+
+            self.log(f"{indent}{key}: {prefix}{hl(value)}{unit}")
