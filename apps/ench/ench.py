@@ -78,7 +78,7 @@ class EnCh(hass.Hass):  # type: ignore
         self.cfg["init_delay_secs"] = int(self.args.get("initial_delay_secs", INITIAL_DELAY))
 
         # home assistant sensor
-        if (hass_sensor := self.args.get("hass_sensor", None)):
+        if hass_sensor := self.args.get("hass_sensor", "sensor.ench_entities"):
             self.cfg["hass_sensor"] = hass_sensor if hass_sensor.startswith("sensor.") else f"sensor.{hass_sensor}"
             self.sensor_state: int = 0
             self.sensor_attrs: Dict[str, Any] = {check: [] for check in CHECKS}

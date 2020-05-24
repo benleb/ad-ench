@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
 
-*EnCh is an [AppDaemon](https://github.com/home-assistant/appdaemon) app which can check Home Assistant entities and sends a notification if desired.*
+*EnCh is an [AppDaemon](https://github.com/home-assistant/appdaemon) app which can check Home Assistant entities and sends a notification if desired. EnCh also provides a Home Assistant sensor entity, showing the currently detected entities.*
 
 ## Supprted Checks
 
@@ -11,6 +11,8 @@
 * **stale entites** (not updated for a specified time)
 
 ## Installation
+
+* Python >=3.8 required!
 
 Use [HACS](https://github.com/custom-components/hacs) or [download](https://github.com/benleb/ad-ench/releases) the `ench` directory from inside the `apps` directory here to your local `apps` directory, then add the configuration to enable the `ench` module.
 
@@ -52,6 +54,7 @@ key | optional | type | default | description
 `notify` | True | string | | The Home Assistant service used for notification
 `show_friendly_name` | True | bool | True | Use friendly name in logs/notifications instead of entity id.
 `initial_delay_secs` | True | int | 120 | Time to wait before first checks. This grace-period is necessary to give slow devices and integrations in Home Assistant a chance to become "available".
+`hass_sensor` | True | string | `sensor.ench_entities` | Name of the sensor entity created in Home Assistant which provides the number of unavailable/stale/low-battery entities
 `exclude` | True | list | | Excluded entities. Supports wildcard/patterns via [fnmatch](https://docs.python.org/3/library/fnmatch.html)
 `battery` | True | map | | Set to enable low battery check
 `unavailable` | True | map | | Set to enable unavailable state check
