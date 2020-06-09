@@ -49,8 +49,10 @@ def hl(text: Union[int, float, str]) -> str:
 
 
 def hl_entity(entity: str) -> str:
-    domain, entity = entity.split(".")
-    return f"{domain}.{hl(entity)}"
+    if (len(splitted := entity.split(".")) > 1):
+        return f"{splitted[0]}.{hl(splitted[1])}"
+    else:
+        return f"{hl(entity)}"
 
 
 class EnCh(hass.Hass):  # type: ignore
