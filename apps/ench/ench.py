@@ -49,7 +49,7 @@ def hl(text: Union[int, float, str]) -> str:
 
 
 def hl_entity(entity: str) -> str:
-    if (len(splitted := entity.split(".")) > 1):
+    if len(splitted := entity.split(".")) > 1:
         return f"{splitted[0]}.{hl(splitted[1])}"
     else:
         return f"{hl(entity)}"
@@ -198,10 +198,11 @@ class EnCh(hass.Hass):  # type: ignore
             if battery_level and battery_level <= check_config["min_level"]:
                 # results.append(entity)
                 results.append((entity, battery_level))
+                last_updated = (await self.last_update(entity)).time().isoformat(timespec="seconds")
                 self.lg(
                     f"{await self._name(entity)} has low "
                     # f"{hl(f'battery → {hl(int(battery_level))}')}%",
-                    f"{hl(f'battery → {hl(int(battery_level))}')}% | " f"last update: {await self.last_update(entity)}",
+                    f"{hl(f'battery → {hl(int(battery_level))}')}% | " f"last update: {last_updated}",
                     # f"last update: {self.adu.last_update(entity)}",
                     icon=ICONS["battery"],
                 )
@@ -226,7 +227,7 @@ class EnCh(hass.Hass):  # type: ignore
         check_config = self.cfg["unavailable"]
         results: List[str] = []
 
-        self.lg("sChecking entities for unavailable/unknown state...", icon=APP_ICON)
+        self.lg("Checking entities for unavailable/unknown state...", icon=APP_ICON)
 
         entities = filter(
             lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), await self.get_state(),
@@ -237,9 +238,9 @@ class EnCh(hass.Hass):  # type: ignore
 
             if state in BAD_STATES and entity not in results:
                 results.append(entity)
+                last_updated = (await self.last_update(entity)).time().isoformat(timespec="seconds")
                 self.lg(
-                    f"{await self._name(entity)} is {hl(state)} | " f"last update: {await self.last_update(entity)}",
-                    icon=ICONS[state],
+                    f"{await self._name(entity)} is {hl(state)} | " f"last update: {last_updated}", icon=ICONS[state],
                 )
 
         # send notification
@@ -275,7 +276,13 @@ class EnCh(hass.Hass):  # type: ignore
 
         for entity in sorted(entities):
 
-            last_update = self.convert_utc(await self.get_state(entity_id=entity, attribute="last_updated"))
+            attr_last_updated = await self.get_state(entity_id=entity, attribute="last_updated")
+
+            if not attr_last_updated:
+                self.lg(f"{await self._name(entity)} has no 'last_updated' attribute ¯\\_(ツ)_/¯", icon=ICONS["stale"])
+                continue
+
+            last_update = self.convert_utc(attr_last_updated)
             now: datetime = await self.datetime(aware=True)
 
             stale_time: timedelta = now - last_update
