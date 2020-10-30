@@ -30,12 +30,15 @@ MAX_STALE_MIN = 60
 
 INITIAL_DELAY = 60
 
+RANDOMIZE_SEC: int = 15
+SECONDS_PER_MIN: int = 60
+
 EXCLUDE = ["binary_sensor.updater", "persistent_notification.config_entry_discovery"]
 BAD_STATES = ["unavailable", "unknown"]
 LEVEL_ATTRIBUTES = ["battery_level", "Battery Level"]
 CHECKS = ["battery", "stale", "unavailable"]
 
-ICONS = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
+ICONS: Dict[str, str] = dict(battery="🔋", unavailable="⁉️ ", unknown="❓", stale="⏰")
 
 
 # version checks
@@ -83,6 +86,7 @@ class EnCh(hass.Hass):  # type: ignore
         self.cfg["init_delay_secs"] = int(self.args.get("initial_delay_secs", INITIAL_DELAY))
 
         # home assistant sensor
+        hass_sensor: str
         if hass_sensor := self.args.get("hass_sensor", "sensor.ench_entities"):
             self.cfg["hass_sensor"] = hass_sensor if hass_sensor.startswith("sensor.") else f"sensor.{hass_sensor}"
             self.sensor_state: int = 0
@@ -99,7 +103,7 @@ class EnCh(hass.Hass):  # type: ignore
         # battery check
         if "battery" in self.args:
 
-            config = self.args.get("battery")
+            config: Dict[str, Union[str, int]] = self.args.get("battery")
 
             # store configuration
             self.cfg["battery"] = dict(
@@ -112,7 +116,11 @@ class EnCh(hass.Hass):  # type: ignore
 
             # schedule check
             await self.run_every(
-                self.check_battery, init_delay, self.cfg["battery"]["interval_min"] * 60,
+                self.check_battery,
+                init_delay,
+                self.cfg["battery"]["interval_min"] * 60,
+                random_start=-RANDOMIZE_SEC,
+                random_end=RANDOMIZE_SEC,
             )
 
         # unavailable check
@@ -121,7 +129,9 @@ class EnCh(hass.Hass):  # type: ignore
             config = self.args.get("unavailable")
 
             # store configuration
-            self.cfg["unavailable"] = dict(interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN)),)
+            self.cfg["unavailable"] = dict(
+                interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN)),
+            )
 
             # no, per check or global notification
             self.choose_notify_recipient("unavailable", config)
@@ -131,6 +141,8 @@ class EnCh(hass.Hass):  # type: ignore
                 self.check_unavailable,
                 await self.datetime() + timedelta(seconds=self.cfg["init_delay_secs"]),
                 self.cfg["unavailable"]["interval_min"] * 60,
+                random_start=-RANDOMIZE_SEC,
+                random_end=RANDOMIZE_SEC,
             )
 
         # stale entities check
@@ -142,7 +154,8 @@ class EnCh(hass.Hass):  # type: ignore
 
             # store configuration
             self.cfg["stale"] = dict(
-                interval_min=int(min([interval_min, max_stale_min])), max_stale_min=int(max_stale_min),
+                interval_min=int(min([interval_min, max_stale_min])),
+                max_stale_min=int(max_stale_min),
             )
 
             self.cfg["stale"]["entities"] = config.get("entities", [])
@@ -155,6 +168,8 @@ class EnCh(hass.Hass):  # type: ignore
                 self.check_stale,
                 await self.datetime() + timedelta(seconds=self.cfg["init_delay_secs"]),
                 self.cfg["stale"]["interval_min"] * 60,
+                random_start=-RANDOMIZE_SEC,
+                random_end=RANDOMIZE_SEC,
             )
 
         # merge excluded entities
@@ -164,7 +179,8 @@ class EnCh(hass.Hass):  # type: ignore
 
         # set units
         self.cfg.setdefault(
-            "_units", dict(interval_min="min", max_stale_min="min", min_level="%"),
+            "_units",
+            dict(interval_min="min", max_stale_min="min", min_level="%"),
         )
 
         self.show_info(self.args)
@@ -174,10 +190,11 @@ class EnCh(hass.Hass):  # type: ignore
         check_config = self.cfg["battery"]
         results: List[Tuple[str, int]] = []
 
-        self.lg("Checking entities for low battery levels...", icon=APP_ICON)
+        self.lg("Checking entities for low battery levels...", icon=APP_ICON, level="DEBUG")
 
         entities = filter(
-            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), await self.get_state(),
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
+            await self.get_state(),
         )
 
         for entity in sorted(entities):
@@ -227,10 +244,11 @@ class EnCh(hass.Hass):  # type: ignore
         check_config = self.cfg["unavailable"]
         results: List[str] = []
 
-        self.lg("Checking entities for unavailable/unknown state...", icon=APP_ICON)
+        self.lg("Checking entities for unavailable/unknown state...", icon=APP_ICON, level="DEBUG")
 
         entities = filter(
-            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), await self.get_state(),
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
+            await self.get_state(),
         )
 
         for entity in sorted(entities):
@@ -240,7 +258,8 @@ class EnCh(hass.Hass):  # type: ignore
                 results.append(entity)
                 last_updated = (await self.last_update(entity)).time().isoformat(timespec="seconds")
                 self.lg(
-                    f"{await self._name(entity)} is {hl(state)} | " f"last update: {last_updated}", icon=ICONS[state],
+                    f"{await self._name(entity)} is {hl(state)} | " f"last update: {last_updated}",
+                    icon=ICONS[state],
                 )
 
         # send notification
@@ -263,7 +282,7 @@ class EnCh(hass.Hass):  # type: ignore
         """Handle scheduled checks."""
         results: List[str] = []
 
-        self.lg("Checking for stale entities...", icon=APP_ICON)
+        self.lg("Checking for stale entities...", icon=APP_ICON, level="DEBUG")
 
         if self.cfg["stale"]["entities"]:
             all_entities = self.cfg["stale"]["entities"]
@@ -271,7 +290,8 @@ class EnCh(hass.Hass):  # type: ignore
             all_entities = await self.get_state()
 
         entities = filter(
-            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]), all_entities,
+            lambda entity: not any(fnmatch(entity, pattern) for pattern in self.cfg["exclude"]),
+            all_entities,
         )
 
         for entity in sorted(entities):
@@ -334,9 +354,7 @@ class EnCh(hass.Hass):  # type: ignore
 
     def _print_result(self, check: str, entities: List[str], reason: str) -> None:
         if entities:
-            self.lg(
-                f"{hl(f'{len(entities)} entities')} with {hl(reason)}!", icon=APP_ICON,
-            )
+            self.lg(f"{hl(f'{len(entities)} entities')} with {hl(reason)}!", icon=APP_ICON, level="DEBUG")
         else:
             self.lg(f"{hl(f'no entities')} with {hl(reason)}!", icon=APP_ICON)
 
@@ -349,16 +367,18 @@ class EnCh(hass.Hass):  # type: ignore
                 level="ERROR",
             )
 
-        self.sensor_attrs[check_name] = entities
-        self.sensor_state = sum([len(self.sensor_attrs[check]) for check in CHECKS])
-        self.set_state(self.cfg["hass_sensor"], state=self.sensor_state, attributes=self.sensor_attrs)
+        if len(self.sensor_attrs[check_name]) != len(entities):
 
-        self.lg(
-            f"{hl(self.cfg['hass_sensor'])} updated: {hl(self.sensor_state)} "
-            f"| {', '.join([f'{k}: {hl(len(v))}' for k, v in self.sensor_attrs.items() if type(v) == list])}",
-            icon=APP_ICON,
-            level="INFO",
-        )
+            self.sensor_attrs[check_name] = entities
+            self.sensor_state = sum([len(self.sensor_attrs[check]) for check in CHECKS])
+            self.set_state(self.cfg["hass_sensor"], state=self.sensor_state, attributes=self.sensor_attrs)
+
+            self.lg(
+                f"{hl(self.cfg['hass_sensor'])} updated: {hl(self.sensor_state)} "
+                f"| {', '.join([f'{hl(k) if k == check_name else k}: {hl(len(v))}' for k, v in self.sensor_attrs.items() if type(v) == list])}",
+                icon=APP_ICON,
+                level="INFO",
+            )
 
     def show_info(self, config: Optional[Dict[str, Any]] = None) -> None:
         # check if a room is given
@@ -374,7 +394,7 @@ class EnCh(hass.Hass):  # type: ignore
             room = f" - {hl(self.config['room'].capitalize())}"
 
         self.lg("")
-        self.lg(f"{hl(APP_NAME)}{room}", icon=self.icon)
+        self.lg(f"{hl(APP_NAME)} v{hl(__version__)}{room}", icon=self.icon)
         self.lg("")
 
         listeners = self.config.pop("listeners", None)
