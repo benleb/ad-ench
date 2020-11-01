@@ -303,6 +303,7 @@ class EnCh(hass.Hass):  # type: ignore
                 continue
 
             last_update = self.convert_utc(attr_last_updated)
+            last_updated = (await self.last_update(entity)).time().isoformat(timespec="seconds")
             now: datetime = await self.datetime(aware=True)
 
             stale_time: timedelta = now - last_update
@@ -313,7 +314,7 @@ class EnCh(hass.Hass):  # type: ignore
                 self.lg(
                     f"{await self._name(entity)} is "
                     f"{hl(f'stale since {hl(int(stale_time.seconds / 60))}')}min | "
-                    f"last update: {last_update}",
+                    f"last update: {last_updated}",
                     icon=ICONS["stale"],
                 )
 
