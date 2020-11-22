@@ -375,7 +375,7 @@ class EnCh(hass.Hass):  # type: ignore
             self.set_state(self.cfg["hass_sensor"], state=self.sensor_state, attributes=self.sensor_attrs)
 
             self.lg(
-                f"{hl(self.cfg['hass_sensor'])} updated: {hl(self.sensor_state)} "
+                f"{hl_entity(self.cfg['hass_sensor'])} -> {hl(self.sensor_state)} "
                 f"| {', '.join([f'{hl(k) if k == check_name else k}: {hl(len(v))}' for k, v in self.sensor_attrs.items() if type(v) == list])}",
                 icon=APP_ICON,
                 level="INFO",
