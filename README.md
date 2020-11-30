@@ -73,6 +73,7 @@ key | optional | type | default | description
 key | optional | type | default | description
 -- | -- | -- | -- | --
 `interval_min` | True | integer | 60 | Minutes between checks
+`max_unavailable_min` | True | integer | 0 | If an entity is unvailable longer than this time, a notification is triggered
 `notify` | True | string | | The Home Assistant service used for notification (Takes precedence over the `notify` setting configured in *General* section)
 
 #### Stale entity/state configuration
