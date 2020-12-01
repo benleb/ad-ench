@@ -267,7 +267,9 @@ class EnCh(hass.Hass):  # type: ignore
                     results.append(entity)
                     last_updated = last_update.time().isoformat(timespec="seconds")
                     self.lg(
-                        f"{await self._name(entity)} is {hl(state)} | " f"last update: {last_updated}",
+                        f"{await self._name(entity)} is "
+                        f"{hl(f'unavailable since {hl(int(unavailable_time.seconds / 60))}')}min | "
+                        f"last update: {last_updated}",
                         icon=ICONS[state],
                     )
 
