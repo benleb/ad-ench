@@ -261,7 +261,7 @@ class EnCh(hass.Hass):  # type: ignore
                 last_update = await self.last_update(entity)
                 now: datetime = await self.datetime(aware=True)
                 unavailable_time: timedelta = now - last_update
-                max_unavailable_min = timedelta(minutes=self.cfg["stale"]["max_unavailable_min"])
+                max_unavailable_min = timedelta(minutes=self.cfg["unavailable"]["max_unavailable_min"])
 
                 if unavailable_time >= max_unavailable_min:
                     results.append(entity)
