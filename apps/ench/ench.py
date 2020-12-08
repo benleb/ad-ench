@@ -4,7 +4,7 @@
   @benleb / https://github.com/benleb/ad-ench
 """
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 from datetime import datetime, timedelta
 from fnmatch import fnmatch
@@ -24,6 +24,7 @@ INTERVAL_BATTERY = INTERVAL_BATTERY_MIN / 60
 
 INTERVAL_UNAVAILABLE_MIN = 60
 INTERVAL_UNAVAILABLE = INTERVAL_UNAVAILABLE_MIN / 60
+MAX_UNAVAILABLE_MIN = 0
 
 INTERVAL_STALE_MIN = 15
 MAX_STALE_MIN = 60
@@ -131,6 +132,7 @@ class EnCh(hass.Hass):  # type: ignore
             # store configuration
             self.cfg["unavailable"] = dict(
                 interval_min=int(config.get("interval_min", INTERVAL_UNAVAILABLE_MIN)),
+                max_unavailable_min=int(config.get("max_unavailable_min", MAX_UNAVAILABLE_MIN)),
             )
 
             # no, per check or global notification
@@ -255,12 +257,21 @@ class EnCh(hass.Hass):  # type: ignore
             state = await self.get_state(entity_id=entity)
 
             if state in BAD_STATES and entity not in results:
-                results.append(entity)
-                last_updated = (await self.last_update(entity)).time().isoformat(timespec="seconds")
-                self.lg(
-                    f"{await self._name(entity)} is {hl(state)} | " f"last update: {last_updated}",
-                    icon=ICONS[state],
-                )
+
+                last_update = await self.last_update(entity)
+                now: datetime = await self.datetime(aware=True)
+                unavailable_time: timedelta = now - last_update
+                max_unavailable_min = timedelta(minutes=self.cfg["unavailable"]["max_unavailable_min"])
+
+                if unavailable_time >= max_unavailable_min:
+                    results.append(entity)
+                    last_updated = last_update.time().isoformat(timespec="seconds")
+                    self.lg(
+                        f"{await self._name(entity)} is "
+                        f"{hl(f'unavailable since {hl(int(unavailable_time.seconds / 60))}')}min | "
+                        f"last update: {last_updated}",
+                        icon=ICONS[state],
+                    )
 
         # send notification
         notify = self.cfg.get("notify") or check_config.get("notify")
