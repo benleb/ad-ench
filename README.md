@@ -4,7 +4,7 @@
 
 *EnCh is an [AppDaemon](https://github.com/home-assistant/appdaemon) app which can check Home Assistant entities and sends a notification if desired. EnCh also provides a Home Assistant sensor entity, showing the currently detected entities.*
 
-## Supprted Checks
+## Supported Checks
 
 * low **battery levels** of various devices
 * proper entity state, e.g. **not `unknown` or `unavailable`**
